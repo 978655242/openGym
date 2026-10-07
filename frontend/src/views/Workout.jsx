@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useRef, useState } from 'react'
+import { Fragment, useEffect, useId, useRef, useState, useSyncExternalStore } from 'react'
 import SwipeCards from '../components/SwipeCards.jsx'
 import { useNavigate } from 'react-router-dom'
 import { useStore } from '../store/useStore.js'
@@ -11,14 +11,16 @@ import { effectiveRoutines, effectiveRoutineIds, lastEntryFor, bestWeightFor, be
 import { fmtNum, fmtPlate, exerciseNameText, fmtDate, todayISO, exCount, DAYN } from '../lib/format.js'
 import { speedUnitOf, toSpeed, fromSpeed } from '../lib/speed.js'
 import { beep, vibrate, unlock } from '../lib/sound.js'
-import { t, exerciseNameFor, exerciseNameClass } from '../lib/i18n.js'
 import { api, beacon } from '../lib/api.js'
 import { insertionIndexAfterCurrentUnit, nextUnfinishedUnit, setProgressHighWater, supersetFlowStep, restAfterSet, restOnRecheck, restSecFor, warmupRestSecFor } from '../lib/supersetFlow.js'
 import Media from '../components/Media.jsx'
+import ExerciseSpeech from '../components/ExerciseSpeech.jsx'
+import { baseLang, dateLocale, getLang, instructionInfoFor, t, useLang, exerciseNameFor, exerciseNameClass } from '../lib/i18n.js'
+import { getSpeechSnapshot, speechAvailability, startSpeech, stopSpeech, subscribeSpeech } from '../lib/exercise-speech.js'
 import { startFlow, exercisePicker, exConfigSheet, exerciseDetailSheet, finishWorkout, exitWorkoutEdit, workoutCompleteSheet, confirmSheet, exerciseNoteSheet, sessionNoteSheet, renameWorkoutSheet, swapActiveWorkoutExercise, barWeightSheet, menuSheet, effortPickerSheet, exerciseHistorySheet, addRoutineToSessionSheet } from '../sheets.jsx'
+import { Button, Check, NumberField, Switch } from '../components/ui.jsx'
 import { effortColor } from '../lib/effort.js'
 import Icon from '../components/Icon.jsx'
-import { Button, Check, NumberField } from '../components/ui.jsx'
 import { defaultIncrement, weightIncrement, stepWeight } from '../lib/progression.js'
 import { progressionGuidance } from '../lib/progression-copy.js'
 import { buildPlannedEntry, plannedConfigOf, builtOutOfProgression } from '../lib/session-start.js'
@@ -92,7 +94,7 @@ const RTL_LETTER = /[֐-ࣿיִ-﷿ﹰ-﻿]/
 // "last time" recap and the progression line — leaving the name, the ⋯ menu, the one-line plan
 // the rows are measured against, and the sets.
 // Nothing dropped is lost: it is all still on the ⋯ menu, or one ⋮ switch back to list/cards.
-function ExerciseBlock({ entryIdx, compact, dense, editing, onToggle, onToggleSide, onField, onAddSet, onRemoveSet, onAddWarmup, onRemoveSetAt, onStartTimed, onPairPrev, onPairNext, onSetRowRef, onProgressionSettings, onNoProg, onSwap, onMoveUp, onMoveDown, canMoveUp, canMoveDown, onRemoveExercise, busy }) {
+function ExerciseBlock({ entryIdx, compact, dense, preview = false, editing, onToggle, onToggleSide, onField, onAddSet, onRemoveSet, onAddWarmup, onRemoveSetAt, onStartTimed, onPairPrev, onPairNext, onSetRowRef, onProgressionSettings, onNoProg, onSwap, onMoveUp, onMoveDown, canMoveUp, canMoveDown, onRemoveExercise, busy }) {
   const S = useStore(s => s.S)
   const update = useStore(s => s.update)
   const working = useUI(s => s.work)
@@ -505,6 +507,7 @@ function ExerciseBlock({ entryIdx, compact, dense, editing, onToggle, onToggleSi
         <button className="iconbtn" aria-label={t('More')} title={t('More')} onClick={openMore}><Icon name="more" /></button>
       </div>
     </div>
+    <ExerciseSpeech ex={ex} preview={preview} />
     {/* Kept out of progression: by hand for this session (the ⋯ menu, with its undo right here),
         or by a deload or rehab routine, which owns that choice and offers no undo. On in every
         view, compact included: it changes what the next session is built from. */}
@@ -630,6 +633,7 @@ function ExerciseBlock({ entryIdx, compact, dense, editing, onToggle, onToggleSi
 export function removeActiveExercise(idx) {
   // Clear the work callback before indexes can shift. This also protects a confirmation sheet
   // that was opened first and confirmed after a timed hold started.
+  stopSpeech()
   useUI.getState().stopWork()
   // A rest countdown belongs to the exercise whose set started it (timer.forIdx). Removing that
   // exercise ends the rest — there is nothing left to rest for. Removing any other exercise
@@ -677,6 +681,51 @@ function ActiveWorkout() {
   const listMode = workoutView === 'list' || workoutView === 'compact'
   const dense = workoutView === 'compact'
   const wc = workoutControls(S)
+  const langV = useLang()
+  const sheets = useUI(s => s.sheets || [])
+  const speechOwner = useId()
+  const speech = useSyncExternalStore(subscribeSpeech, getSpeechSnapshot)
+  const [autoSpeech, setAutoSpeech] = useState(false)
+  const autoRead = useRef(new Set())
+  const autoAttempt = useRef(null)
+  const currentEntry = A.entries[cur]
+  const startAutoSpeech = entry => {
+    const info = instructionInfoFor(exOr(entry?.id))
+    if (!entry || info.lang !== baseLang(getLang()) || speechAvailability(dateLocale())) return false
+    const started = startSpeech({ owner: speechOwner, exerciseId: entry.id, steps: info.steps, lang: dateLocale() })
+    if (started) autoRead.current.add(entry.id)
+    return started
+  }
+  const toggleAutoSpeech = on => {
+    if (!on) { setAutoSpeech(false); stopSpeech(speechOwner); return }
+    if (editing || A.backfill || !currentEntry) return
+    if (autoRead.current.has(currentEntry.id)) { setAutoSpeech(true); return }
+    if (startAutoSpeech(currentEntry)) setAutoSpeech(true)
+  }
+  useEffect(() => {
+    if (!autoSpeech || editing || A.backfill || sheets.length || document.hidden || !currentEntry) return
+    if (autoRead.current.has(currentEntry.id) || autoAttempt.current === currentEntry) return
+    autoAttempt.current = currentEntry
+    if (!startAutoSpeech(currentEntry)) setAutoSpeech(false)
+  }, [autoSpeech, currentEntry, editing, A.backfill, sheets.length])
+  useEffect(() => {
+    if (sheets.length) { stopSpeech(speechOwner); setAutoSpeech(false) }
+  }, [sheets.length, speechOwner])
+  useEffect(() => {
+    if (speech.owner === speechOwner && speech.status === 'error') setAutoSpeech(false)
+  }, [speech, speechOwner])
+  useEffect(() => {
+    const hidden = () => { if (document.hidden) { stopSpeech(speechOwner); setAutoSpeech(false) } }
+    document.addEventListener('visibilitychange', hidden)
+    return () => { document.removeEventListener('visibilitychange', hidden); stopSpeech(speechOwner) }
+  }, [speechOwner])
+  useEffect(() => { stopSpeech(speechOwner); setAutoSpeech(false) }, [langV, speechOwner])
+  const speechEntryKey = `${cur}:${currentEntry?.id || ''}`
+  const previousSpeechEntry = useRef(speechEntryKey)
+  useEffect(() => {
+    if (previousSpeechEntry.current !== speechEntryKey) stopSpeech()
+    previousSpeechEntry.current = speechEntryKey
+  }, [speechEntryKey])
   // Superset flow: center the actionable row when completing a set moves to the partner or
   // back to the first exercise of the next round. Entry-bound maps keep repeated exercise IDs
   // distinct, while each rendered set index identifies the existing row within that entry.
@@ -854,7 +903,7 @@ function ActiveWorkout() {
   // a superset member acts on that member, not on whatever the marker happens to point at.
   const blockProps = idx => ({
     editing,
-    onSwap: () => swapActiveWorkoutExercise(idx),
+    onSwap: () => { stopSpeech(); swapActiveWorkoutExercise(idx) },
     onMoveUp: () => moveUnitAt(idx, -1),
     onMoveDown: () => moveUnitAt(idx, 1),
     canMoveUp: canMoveActiveWorkoutUnit(A, idx, -1),
@@ -881,6 +930,7 @@ function ActiveWorkout() {
       return freshUnitIdx < 0 ? null : freshUnits[freshUnitIdx + direction]?.[0] ?? null
     }
     if (targetFor(useStore.getState().S.active) == null) return
+    stopSpeech()
     update(s => {
       const target = targetFor(s.active)
       if (target != null) s.active.cur = target
@@ -1260,6 +1310,10 @@ function ActiveWorkout() {
     </div>
     <div className="wprog"><i style={{ width: (total ? done / total * 100 : 0) + '%' }} /></div>
     </div>
+    {!editing && !A.backfill && <div className="row" style={{ justifyContent: 'center', gap: 8, marginTop: 8 }}>
+      <Switch checked={autoSpeech} onChange={toggleAutoSpeech} aria-label={t('Auto narration')} />
+      <span className="small dim">{t('Auto narration')} · {t('This workout only')}</span>
+    </div>}
     {editing && <p className="muted small">{t('Editing a saved workout. Date and duration stay unchanged.')}</p>}
     {A.backfill && <div className="muted small" style={{ marginBottom: 8 }}>{t('Logging a past workout — no rest timers.')}</div>}
 
@@ -1315,10 +1369,10 @@ function ActiveWorkout() {
               <div className="ss-hd"><Icon name="link" />{t('Superset · do these back-to-back, rest when done')}</div>
               {adjacent.map((idx, k) => <div key={idx} className="ss-ex">
                 {k > 0 && <div className="ss-amp">+</div>}
-                <ExerciseBlock entryIdx={idx} compact {...blockProps(idx)} />
+                <ExerciseBlock entryIdx={idx} compact preview {...blockProps(idx)} />
               </div>)}
             </div>
-          ) : <ExerciseBlock entryIdx={adjacent[0]} {...blockProps(adjacent[0])} />
+          ) : <ExerciseBlock entryIdx={adjacent[0]} preview {...blockProps(adjacent[0])} />
         }}>
       {isSuperset ? (
         <div className="ss-card">
@@ -1402,7 +1456,7 @@ function ActiveWorkout() {
       <div style={{ height: 6 }} />
       <div style={{ display: 'flex', justifyContent: 'center' }}>
         <Button size="sm" icon="shuffle" aria-label={t('Swap exercise')} disabled={!!work}
-          onClick={() => swapActiveWorkoutExercise(cur)}>{t('Swap exercise')}</Button>
+          onClick={() => { stopSpeech(); swapActiveWorkoutExercise(cur) }}>{t('Swap exercise')}</Button>
       </div>
       <div style={{ height: 6 }} />
       <div style={{ display: 'flex', justifyContent: 'center' }}>
