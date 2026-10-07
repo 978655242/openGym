@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- The Chinese exercise library now displays translated names for the built-in exercise catalogue.
+
+
 ## v1.3.9 — 2026-09-28
 
 The milestone was "edit your history", and it is in: fix a saved workout after the fact, move it to

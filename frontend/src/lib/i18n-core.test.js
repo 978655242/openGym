@@ -101,6 +101,15 @@ describe('de-CH as a selectable language', () => {
   })
 })
 
+describe('Chinese exercise names', () => {
+  it('shows a Chinese catalogue name with the English title as context', () => {
+    _setLangState('zh', {}, null, { '1512': '四点跪姿深蹲拉伸' })
+    expect(exerciseNameFor({ id: '1512', n: 'all fours squad stretch' }))
+      .toBe('四点跪姿深蹲拉伸 (all fours squad stretch)')
+    _setLangState('en', {}, null, null)
+  })
+})
+
 // EXDB stores English names lower-case and the UI title-cases them with CSS. German brings its
 // own casing, and applying capitalize on top of it produced "Bankdrücken Mit Langhantel". The
 // other packs are stored lower-case like EXDB, and without the class they read all lower-case.
@@ -142,9 +151,10 @@ describe('title-casing per exercise-name pack', () => {
   const packFor = lang => packs[`../exercise-names/${lang}.js`]
   // Share of names that start with a lower-case letter. A lower-case pack still has a few that
   // start upper-case for a reason of their own (EZ-rudas, L-sit, SkiErg), German has none.
+  // Languages without letter case (e.g. Chinese) already carry their own casing.
   const lowerShare = names => {
     const firsts = Object.values(names).map(n => [...n][0]).filter(c => c && c.toLocaleLowerCase() !== c.toLocaleUpperCase())
-    return firsts.filter(c => c === c.toLocaleLowerCase()).length / firsts.length
+    return firsts.length ? firsts.filter(c => c === c.toLocaleLowerCase()).length / firsts.length : 1
   }
 
   it('lists exactly the packs written in their own casing', () => {

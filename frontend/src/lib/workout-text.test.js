@@ -91,8 +91,8 @@ describe('workoutText speed unit', () => {
   })
 })
 
-// Copy as text has no CSS to title-case with, so it capitalises itself wherever the screen does
-// (exerciseNameClass): every translated pack stored lower-case, and not German's own casing.
+// Copy as text has no CSS to title-case with, so it capitalises the lower-case packs itself and
+// leaves German and Chinese in their native casing (exerciseNameClass).
 describe('workoutText exercise names per language', () => {
   const packs = import.meta.glob('../exercise-names/*.js', { eager: true, import: 'default' })
   const w = { id: 'w2', d: '2026-09-03', start: 0, end: 0, name: 'Push', vol: 0,
@@ -100,10 +100,11 @@ describe('workoutText exercise names per language', () => {
   const nameLine = () => workoutText(w, { unit: 'kg', nameOf: e => exerciseNameFor(EXIDX[e.id]) }).split('\n\n')[1].split('\n')[0]
   afterEach(() => _setLangState('en', {}, null, null))
 
-  it('keeps German as the pack writes it and title-cases the lower-case packs', () => {
+  it('keeps German and Chinese as written and title-cases the lower-case packs', () => {
     const expected = {
       de: 'Bankdrücken mit Langhantel', es: 'Press De Banca Con Barra', fr: 'Développé Couché À La Barre',
       it: 'Panca Piana Con Bilanciere', 'pt-BR': 'Supino Com Barra', ru: 'Жим Штанги Лёжа', hu: 'Fekvenyomás Rúddal',
+      zh: '杠铃卧推',
     }
     for (const lang of EXERCISE_NAME_LANGS) {
       _setLangState(lang, {}, null, packs[`../exercise-names/${lang}.js`], false)
