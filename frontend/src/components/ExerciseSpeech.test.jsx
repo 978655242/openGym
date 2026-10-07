@@ -10,6 +10,7 @@ import { _setLangState } from '../lib/i18n-core.js'
 
 let host, root, utterances, platform
 const EX = { id: '0043', n: 'squat', st: ['Stand tall.', 'Bend your knees.'] }
+const EX2 = { id: '0054', n: 'lunge', st: ['Step forward.', 'Lower down.'] }
 
 beforeEach(() => {
   utterances = []
@@ -31,17 +32,28 @@ afterEach(() => {
 })
 const mount = props => act(() => root.render(<ExerciseSpeech ex={EX} {...props} />))
 
-it('starts, pauses, and resumes the current instruction step', () => {
+it('uses compact icon buttons for pause and stop narration', () => {
   mount()
   const read = host.querySelector('button')
   expect(read.textContent).toBe('Read instructions')
   act(() => read.click())
   utterances.at(-1).onstart()
-  expect(host.textContent).toContain('Stand tall.')
-  expect(host.textContent).toContain('Instruction 1 / 2')
-  act(() => [...host.querySelectorAll('button')].find(button => button.textContent === 'Pause').click())
-  expect(host.textContent).toContain('Resume restarts the current step.')
-  act(() => [...host.querySelectorAll('button')].find(button => button.textContent === 'Resume').click())
+  const controls = host.querySelector('.speech-controls > .row')
+  const pause = controls.querySelector('[aria-label="Pause"]')
+  const stop = controls.querySelector('[aria-label="Stop narration"]')
+  expect(pause.textContent).toBe('')
+  expect(stop.textContent).toBe('')
+  expect(pause.querySelector('[data-icon="pause"]')).not.toBeNull()
+  expect(stop.querySelector('[data-icon="xmark"]')).not.toBeNull()
+  act(() => pause.click())
+  expect([...controls.querySelectorAll('button')].map(button => button.getAttribute('aria-label'))).toEqual(['Resume', 'Stop narration'])
+  const resume = controls.querySelector('[aria-label="Resume"]')
+  expect(resume.textContent).toBe('')
+  expect(resume.querySelector('[data-icon="play"]')).not.toBeNull()
+  expect(stop.textContent).toBe('')
+  expect(controls.style.gap).toBe('6px')
+  expect(host.textContent).not.toContain('Resume restarts the current step.')
+  act(() => controls.querySelector('[aria-label="Resume"]').click())
   expect(utterances.at(-1).text).toBe('Stand tall.')
 })
 
@@ -62,13 +74,12 @@ describe('ownership cleanup', () => {
   it('does not stop a replacement owned by another entrance', () => {
     const renderEntrances = first => act(() => root.render(<>
       {first && <div key="detail"><ExerciseSpeech ex={EX} /></div>}
-      <div key="workout"><ExerciseSpeech ex={EX} /></div>
+      <div key="workout"><ExerciseSpeech ex={EX2} /></div>
     </>))
     renderEntrances(true)
     act(() => host.querySelectorAll('.speech-controls')[0].querySelector('button').click())
     const firstOwner = getSpeechSnapshot().owner
-    act(() => [...host.querySelectorAll('.speech-controls')[1].querySelectorAll('button')]
-      .find(button => button.textContent === 'Replay instructions').click())
+    act(() => host.querySelectorAll('.speech-controls')[1].querySelector('button').click())
     const secondOwner = getSpeechSnapshot().owner
     expect(secondOwner).not.toBe(firstOwner)
     platform.cancel.mockClear()

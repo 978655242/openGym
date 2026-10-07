@@ -45,16 +45,15 @@ function ExerciseSpeechControl({ ex }) {
 
   const step = active ? steps[snapshot.stepIndex] : null
   return <div className="speech-controls" onClick={quiet}>
-    <div className="row" style={{ gap: 6, flexWrap: 'wrap' }}>
+    <div className="row" style={{ gap: 6, flexWrap: 'nowrap' }}>
       {!active && <Button type="button" aria-label={t('Read instructions')} onClick={start}>{t('Read instructions')}</Button>}
-      {active && snapshot.status === 'paused' && <Button type="button" aria-label={t('Resume')} onClick={resume}>{t('Resume')}</Button>}
-      {active && snapshot.status !== 'paused' && snapshot.status !== 'ended' && <Button type="button" aria-label={t('Pause')} onClick={pause}>{t('Pause')}</Button>}
-      {active && snapshot.status !== 'ended' && <Button type="button" aria-label={t('Stop narration')} onClick={stop}>{t('Stop narration')}</Button>}
-      {active && <Button type="button" aria-label={t('Replay instructions')} onClick={start}>{t('Replay instructions')}</Button>}
+      {active && snapshot.status === 'paused' && <Button type="button" icon="play" aria-label={t('Resume')} onClick={resume} />}
+      {active && snapshot.status !== 'paused' && snapshot.status !== 'ended' && <Button type="button" icon="pause" aria-label={t('Pause')} onClick={pause} />}
+      {active && snapshot.status !== 'ended' && <Button type="button" icon="xmark" aria-label={t('Stop narration')} onClick={stop} />}
+      {snapshot.status === 'ended' && snapshot.exerciseId === ex.id && <Button type="button" aria-label={t('Replay instructions')} onClick={start}>{t('Replay instructions')}</Button>}
     </div>
     {step && <div className="small dim" style={{ marginTop: 5 }}>
       {t('Instruction {0} / {1}', snapshot.stepIndex + 1, steps.length)} · {step}
     </div>}
-    {active && snapshot.status === 'paused' && <div className="small dim" style={{ marginTop: 3 }}>{t('Resume restarts the current step.')}</div>}
   </div>
 }
