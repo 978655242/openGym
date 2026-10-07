@@ -91,6 +91,10 @@ invite-only and give yourself an admin dashboard; see
 FitNotes, Strong and Hevy work out of the box, Apple Health for body weight, and any CSV with a date,
 an exercise and something measured. See [DATA_IMPORTS.md](DATA_IMPORTS.md).
 
+### Can openGym read exercise instructions aloud?
+
+Yes. Use **Read instructions** below the media in an exercise detail, or below an exercise title during a workout. It reads the existing steps in the current language with a local device voice; pause then resume restarts the current step. The workout screen also has an optional **Auto narration** switch for that session only: it is off by default and reads each exercise ID at most once. Install or enable a local voice for the language in your device settings if the control says none is available. Narration stops when you close the entry, switch language, leave the page or put the app in the background; it does not promise lock-screen playback.
+
 ### Can I reuse the exercise images in my own project?
 
 Not on openGym's say-so. The images and animations aren't covered by openGym's license and their

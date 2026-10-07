@@ -77,6 +77,17 @@ export function t(s, ...args) {
 // Instructions for an exercise in the current language (English steps as fallback).
 export const instrFor = ex => (instr && instr[ex.id]) || ex.st || []
 
+// Same source priority as instrFor, plus the language the steps are actually written in, so a
+// narrated step is never read with a voice for the wrong language. The English fallback is
+// 'en' (not the UI language); a user-made exercise's ex.st is free text of unknown language and
+// an exercise with no steps has none, so both are null rather than a guess.
+export const instructionInfoFor = ex => {
+  const translated = instr && instr[ex.id]
+  if (translated) return { steps: translated, lang: baseLang(lang) }
+  const steps = ex.st || []
+  return { steps, lang: steps.length && !ex.custom ? 'en' : null }
+}
+
 // Built-in catalogue names are bilingual when a translated name pack is active. A pack need not
 // be complete: German covers the equipment exercises and not the body-weight ones, and an
 // exercise the pack has no entry for keeps its English title, one exercise at a time.

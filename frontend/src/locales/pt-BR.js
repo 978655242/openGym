@@ -1008,6 +1008,18 @@ export const PT_BR_OVERRIDES = {
   'Teal': 'Turquesa',
   'Yellow': 'Amarelo',
   'Enter how long it took — at least 1 minute.': 'Informe quanto tempo levou — pelo menos 1 minuto.',
+  'Read instructions': 'Ler instruções',
+  'Replay instructions': 'Repetir instruções',
+  'Stop narration': 'Parar narração',
+  'Instruction {0} / {1}': 'Instrução {0} / {1}',
+  'Speech is not supported on this device.': 'A leitura por voz não é compatível com este dispositivo.',
+  'No local voice is available for this language. Check your device speech settings.': 'Não há voz local disponível para este idioma. Verifique as configurações de voz do dispositivo.',
+  'Instructions are not available in the current language.': 'As instruções não estão disponíveis no idioma atual.',
+  'Tap Read instructions to try again.': 'Toque em Ler instruções para tentar novamente.',
+  'Could not play the instructions.': 'Não foi possível ler as instruções.',
+  'Resume restarts the current step.': 'Retomar reinicia a etapa atual desde o início.',
+  'Auto narration': 'Narração automática',
+  'This workout only': 'Somente neste treino',
 }
 
 export default { ...pt, ...PT_BR_OVERRIDES }

@@ -14,6 +14,7 @@ import { installViewportGuard } from './lib/viewport-guard.js'
 import { installChipDrag } from './lib/hchips.js'
 import { syncPushSubscription } from './lib/push.js'
 import { MOBILE } from './lib/mobile.js'
+import { stopSpeech } from './lib/exercise-speech.js'
 import { exitWorkoutEdit, startFlow } from './sheets.jsx'
 import Icon from './components/Icon.jsx'
 import TabBar from './components/TabBar.jsx'
@@ -100,10 +101,19 @@ function Shell() {
   // worked out here, on this device, and never written into the synced state (lib/default-lang.js).
   const config = useStore(s => s.config)
   const lang = effectiveLang(S, config)
+  // Narration is in-memory and must stop before setLang begins lazy pack loading.
+  useEffect(() => { stopSpeech() }, [lang])
   useEffect(() => { setLang(lang, S.enParens?.[baseLang(lang)] ?? true, S.enOnly?.[baseLang(lang)] === true) }, [lang, S.enParens, S.enOnly])
   // Same shape as the language: a module-level display setting, pushed when it changes (#139).
   useEffect(() => { setWeightDecimals(S.wdec) }, [S.wdec])
   useEffect(() => { document.documentElement.lang = lang }, [langV, lang])
+  useEffect(() => { stopSpeech() }, [loc.pathname, langV])
+  useEffect(() => {
+    const stop = () => { if (document.hidden) stopSpeech() }
+    document.addEventListener('visibilitychange', stop)
+    window.addEventListener('pagehide', stop)
+    return () => { document.removeEventListener('visibilitychange', stop); window.removeEventListener('pagehide', stop) }
+  }, [])
   // Forward navigation starts at the top; going back lands where you left off.
   // The position is recorded from scroll events rather than read at route
   // change, because by then a shorter page may already have clamped it.

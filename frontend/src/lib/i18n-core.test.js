@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest'
 import {
   LANGS, INSTR_LANGS, EXERCISE_NAME_LANGS, DATE_LOCALES, DERIVED_LOCALES,
-  baseLang, derivePack, dateLocale, getLang, t, _setLangState, exerciseNameClass, exerciseNameFor, CASED_NAME_LANGS
+  baseLang, derivePack, dateLocale, getLang, t, _setLangState, exerciseNameClass, exerciseNameFor, CASED_NAME_LANGS,
+  instrFor, instructionInfoFor
 } from './i18n-core.js'
 import { EXDB } from './exercises-data.js'
 import de from '../locales/de.js'
@@ -221,5 +222,42 @@ describe('English-name switches with every exercise-name pack', () => {
       expect(exerciseNameClass(ex)).toBe('capitalize')
     }
     _setLangState('en', {}, null, null)
+  })
+})
+
+describe('instructionInfoFor', () => {
+  const ex = { id: '0043', st: ['Stand with feet shoulder-width apart.'] }
+  const reset = () => _setLangState('en', {}, null, null)
+
+  it('reports the pack language when the translated steps exist', () => {
+    try {
+      _setLangState('zh', {}, { '0043': ['双脚与肩同宽站立。'] }, null)
+      const info = instructionInfoFor(ex)
+      expect(info).toEqual({ steps: ['双脚与肩同宽站立。'], lang: 'zh' })
+      expect(info.steps).toBe(instrFor(ex))
+    } finally { reset() }
+  })
+
+  it('reports English fallback instead of labelling it Chinese', () => {
+    try {
+      _setLangState('zh', {}, {}, null)
+      expect(instructionInfoFor(ex)).toEqual({ steps: ex.st, lang: 'en' })
+    } finally { reset() }
+  })
+
+  it('labels English fallback for a derived locale whose base ships no instruction pack', () => {
+    try {
+      _setLangState('de-CH', {}, { '0043': ['Stell dich hin.'] }, null)
+      expect(INSTR_LANGS.includes(baseLang('de-CH'))).toBe(false)
+      expect(instructionInfoFor(ex)).toEqual({ steps: ex.st, lang: 'en' })
+    } finally { reset() }
+  })
+
+  it('has no language for empty steps or an unannotated custom exercise', () => {
+    try {
+      _setLangState('zh', {}, {}, null)
+      expect(instructionInfoFor({ id: 'c1' })).toEqual({ steps: [], lang: null })
+      expect(instructionInfoFor({ id: 'c1', custom: true, st: ['My own cue.'] }).lang).toBe(null)
+    } finally { reset() }
   })
 })
