@@ -23,6 +23,7 @@ import { sniffKind } from './media-sniff.js'
 import { sha256Hex } from './sha256.js'
 import { mediaStore } from './media-store.js'
 import { DEFAULT_LIMITS, MB } from './media-limits.js'
+import { normalizeCheckIns } from './checkin.js'
 
 export const BACKUP_JSON = 'opengym-backup.json'
 const MEDIA_ENTRY = /^media\/([0-9a-f]{64})\.(jpg|png|webp|gif|mp4|mov|webm)$/
@@ -31,9 +32,9 @@ const README = `openGym backup with photos and videos
 =====================================
 
 opengym-backup.json  your data - the same file "Export backup (JSON)" writes.
-media/               the photos, GIFs and videos of your own exercises and of your
-                     workouts, each named by its SHA-256, plus the small previews
-                     shown in lists.
+media/               the photos, GIFs and videos of your own exercises and workouts,
+                     and your attendance photos, each named by its SHA-256, plus
+                     the small previews shown in lists.
 
 To bring it back: openGym -> Settings -> Import backup, and pick this .zip as it is.
 Do not unpack and re-zip it: the app reads zips that are stored, not compressed.
@@ -56,6 +57,7 @@ export function sanitizeCustomMedia(state) {
     const list = workoutMediaOf(w, Infinity)
     if (list.length) w.media = list; else delete w.media
   }
+  if (state && typeof state === 'object' && 'gymCheckIns' in state) state.gymCheckIns = normalizeCheckIns(state.gymCheckIns)
   return state
 }
 
@@ -97,6 +99,7 @@ export async function readBackupFile(file) {
     if (!json) throw new Error('not an openGym backup')
     state = JSON.parse(await json.blob.text())
     if (!isBackup(state)) throw new Error('not an openGym backup')
+    sanitizeCustomMedia(state)
     const wanted = new Set(referencedFiles(state).map(f => f.hash))
     const seen = new Set()
     for (const e of entries) {
@@ -108,8 +111,9 @@ export async function readBackupFile(file) {
   } else {
     state = JSON.parse(await file.text())
     if (!isBackup(state)) throw new Error('not an openGym backup')
+    sanitizeCustomMedia(state)
   }
-  return { state: sanitizeCustomMedia(state), files, zip }
+  return { state, files, zip }
 }
 
 /**

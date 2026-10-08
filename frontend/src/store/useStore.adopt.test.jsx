@@ -330,3 +330,46 @@ describe('the back-online toast belongs to the account that was offline', () => 
     expect(toast).not.toHaveBeenCalledWith('Back online — synced with the server.')
   })
 })
+
+describe('a daily photo journal is profile data', () => {
+  const entry = { id: '2026-10-08', d: '2026-10-08', at: 1, _ts: 2, media: { kind: 'image', hash: 'a'.repeat(64), mime: 'image/jpeg', size: 3, width: 8, height: 6, at: 1 } }
+  it('pushes a photo-only device copy into a new profile', async () => {
+    const S = { ...clone(DEF), gymCheckIns: [entry] }
+    expect(hasData(S)).toBe(true)
+    signedIn(S)
+    api.mockResolvedValueOnce({ state: null, rev: 0 })
+    api.mockResolvedValueOnce({ ok: true, rev: 1 })
+    await useStore.getState().adoptProfile(vi.fn())
+    expect(puts()).toHaveLength(1)
+    expect(puts()[0].state.gymCheckIns).toEqual([entry])
+  })
+  it('asks before moving a photo-only guest copy into an existing profile', async () => {
+    signedIn({ ...clone(DEF), gymCheckIns: [entry] })
+    api.mockResolvedValueOnce({ state: clone(server), rev: 4 })
+    const ask = vi.fn(async () => false)
+    await useStore.getState().adoptProfile(ask)
+    expect(ask).toHaveBeenCalledWith(expect.objectContaining({ gymCheckIns: 1 }))
+    expect(useStore.getState().S.gymCheckIns).toEqual([])
+  })
+})
+
+it('normalizes journal records at wholesale state adoption and preserves deletion-only owed data', () => {
+  const deleted = { id: '2026-10-08', d: '2026-10-08', at: 1, _ts: 3, deleted: true }
+  expect(hasData({ ...clone(DEF), gymCheckIns: [deleted] })).toBe(true)
+  useStore.getState().replaceState({ ...clone(DEF), gymCheckIns: [{ ...deleted, media: { hash: 'a'.repeat(64) } }, { ...deleted, d: '2026-02-30' }] })
+  expect(useStore.getState().S.gymCheckIns).toEqual([deleted])
+  expect(JSON.parse(localStorage.getItem('gym_state_v1')).gymCheckIns).toEqual([deleted])
+})
+
+it('keeps a same-day photo edited while sign-in adoption was held when guest data is declined', async () => {
+  const photo = hash => ({ kind: 'image', hash: hash.repeat(64), mime: 'image/jpeg', size: 3, width: 8, height: 6, at: 1 })
+  const entry = { id: '2026-10-08', d: '2026-10-08', at: 1, _ts: 2, media: photo('a') }
+  useStore.setState({ S: { ...clone(DEF), gymCheckIns: [entry] }, user: null, ready: true })
+  useStore.getState().setUser({ id: 'user-1' }, { adopt: true })
+  useStore.getState().update(s => { s.gymCheckIns = [{ ...entry, _ts: 3, media: photo('b') }] })
+  api.mockResolvedValueOnce({ state: clone(server), rev: 4 })
+  api.mockResolvedValueOnce({ ok: true, rev: 5 })
+  await useStore.getState().adoptProfile(async () => false)
+  expect(useStore.getState().S.gymCheckIns).toEqual([{ ...entry, _ts: 3, media: photo('b') }])
+  expect(puts()[0].state.gymCheckIns[0].media.hash).toBe('b'.repeat(64))
+})

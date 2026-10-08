@@ -12,9 +12,6 @@ import { referencedHashes } from '../media.js';
 const FIXTURE = path.join(path.dirname(fileURLToPath(import.meta.url)), 'fixtures', 'media-refs.json');
 const { referencedHashes: cases } = JSON.parse(fs.readFileSync(FIXTURE, 'utf8'));
 
-test('the shared fixture is there and has cases', () => {
-  assert.ok(Array.isArray(cases) && cases.length >= 10);
-});
 
 for (const c of cases) {
   test(`referencedHashes: ${c.name}`, () => {

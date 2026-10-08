@@ -91,6 +91,27 @@ invite-only and give yourself an admin dashboard; see
 FitNotes, Strong and Hevy work out of the box, Apple Health for body weight, and any CSV with a date,
 an exercise and something measured. See [DATA_IMPORTS.md](DATA_IMPORTS.md).
 
+### How does daily gym check-in work?
+
+Open **Daily check-in** on Home and take or choose a still gym photo. Each local calendar date
+counts once; replacing today's photo does not add another check-in. Only today's record can be
+replaced or deleted, and deleting it lets you check in again that day. There is no backfill.
+**Check-in history** is a monthly calendar: checked-in dates are highlighted and marked with
+  a dot, today is outlined, and tapping a marked date opens its photo and date. Switch months
+  to review older records; past photos remain read-only.
+
+Honors unlock at **7, 30, 100 and 365 cumulative dates**, with no points. Consecutive days are
+tracked separately: yesterday's streak remains while today is pending; missing a whole day
+breaks that streak but not the cumulative total.
+Each honor badge has a ring showing progress toward its milestone; completed badges light up
+with a checkmark. Completion is capped at a full ring, and screen readers receive the counts.
+
+Photos have **no automatic expiry** while their records remain. Clearing app storage, resetting
+everything or deleting the profile still removes data. **Export with photos & videos (.zip)**
+keeps the photos too; an ordinary JSON backup holds references, not image bytes. Upgrade the
+API together with the app for photo sync: an older server cannot retain check-in photos.
+The app does not verify the photo's location or authenticity, and no gym QR code is needed.
+
 ### Can openGym read exercise instructions aloud?
 
 Yes. Use **Read instructions** below the media in an exercise detail, or below an exercise title during a workout. It reads the existing steps in the current language with a local device voice; pause then resume restarts the current step. The workout screen also has an optional **Auto narration** switch for that session only: it is off by default and reads each exercise ID at most once. Install or enable a local voice for the language in your device settings if the control says none is available. Narration stops when you close the entry, switch language, leave the page or put the app in the background; it does not promise lock-screen playback.

@@ -41,3 +41,10 @@ describe('counting what the server has not seen', () => {
     expect(countChanges(state(), null)).toBeNull()
   })
 })
+
+it('counts journal days individually, including replacement and deletion tombstones', () => {
+  const first = { id: '2026-10-07', d: '2026-10-07', _ts: 1, media: { hash: 'a'.repeat(64) } }
+  const second = { id: '2026-10-08', d: '2026-10-08', _ts: 1, media: { hash: 'b'.repeat(64) } }
+  const fp = syncFingerprint(state({ gymCheckIns: [first, second] }))
+  expect(countChanges(state({ gymCheckIns: [{ ...first, _ts: 2, deleted: true }, { ...second, _ts: 3, media: { hash: 'c'.repeat(64) } }] }), fp)).toBe(2)
+})

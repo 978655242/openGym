@@ -13,6 +13,7 @@ import { pendingRefCount, settleMedia, loadPending } from '../lib/media-owed.js'
 import { referencedHashes } from '../lib/media-refs.js'
 import { mediaStore, mediaStoreInUse } from '../lib/media-store.js'
 import { countChanges, syncFingerprint } from '../lib/sync-changes.js'
+import { normalizeCheckIns } from '../lib/checkin.js'
 import { saveWorkoutEdit, deleteEditedWorkout } from '../lib/session-edit.js'
 import { appBase } from '../lib/app-base.js'
 import { linkTokenFromSearch, stripLinkFromUrl } from '../lib/device-link.js'
@@ -64,12 +65,14 @@ const MIRROR_OWNER_FILE = 'opengym-state-owner.json'
 const CHECK_MIN_MS = 3000    // rev checks closer together than this are the same event (focus + visibility)
 const POLL_MS = 30000        // while the app is open and signed in, ask the server for its revision this often
 const AUTO_BACKUP_SOON_MS = 2000   // several photos picked at once make one backup
-// Whether `next` has a workout photo or video that `prev` had on none of its workouts.
-const workoutMediaHashes = S => (Array.isArray(S?.workouts) ? S.workouts : [])
-  .flatMap(w => (Array.isArray(w?.media) ? w.media.map(m => m?.hash).filter(h => typeof h === 'string' && h) : []))
-const gainedWorkoutMedia = (prev, next) => {
-  const had = new Set(workoutMediaHashes(prev))
-  return workoutMediaHashes(next).some(h => !had.has(h))
+// A newly attached workout or attendance photo is worth the day's automatic backup.
+const backupMediaHashes = S => [
+  ...(Array.isArray(S?.workouts) ? S.workouts : []).flatMap(w => (Array.isArray(w?.media) ? w.media.map(m => m?.hash).filter(h => typeof h === 'string' && h) : [])),
+  ...normalizeCheckIns(S?.gymCheckIns).filter(e => !e.deleted).map(e => e.media.hash),
+]
+const gainedBackupMedia = (prev, next) => {
+  const had = new Set(backupMediaHashes(prev))
+  return backupMediaHashes(next).some(h => !had.has(h))
 }
 export const DEF = {
   unit: 'kg', restSec: 90, restPauseSec: 15, sound: true, soundOnSilent: false, timerFlash: false, timedSetOvertime: false, keepAwake: true, lang: 'en',
@@ -129,21 +132,12 @@ export const DEF = {
   // leg press is 'single'; a barbell you never load plates on is 'none'. Absent or null = derived
   // from the equipment. Stamped like the plate list, for the same reason.
   loadKind: {},
-  // Gym check-in cards (see views/CheckIn.jsx). Each is a membership
-  // code shown as a QR/barcode at the gym's turnstile — added by typing it, importing a photo
-  // of the card, or scanning it. We only ever keep the code's VALUE, never a photo: the image
-  // is regenerated from `value` every time it's shown (lib/qr.js). `fmt` is the barcode symbology
-  // ('qrcode' | 'ean13' | 'code128' | … — lower-cased BarcodeFormat) so it renders as the same
-  // kind of code the gym issued. Just data, so it syncs and backs up like everything else.
-  //   [{ id, label, value, fmt }]
+  // Inert archive of legacy membership codes; no longer used by attendance check-in.
   gymCards: [],
-  // The card the check-in screen last settled on, so it reopens where you left it (handy when
-  // you have more than one gym). Holds a gymCards id, or null before any card exists / is chosen;
-  // a stale id (card since removed) is simply ignored by the view.
   lastGymCardId: null,
-  // Whether the check-in feature is on at all (Settings toggle). Off hides the Home
-  // card and the /checkin route; the saved gymCards stay so turning it back on restores them.
-  // Defaults on; an older profile without the key reads as on (`!== false`).
+  // One attendance photo or deletion tombstone per local calendar date (lib/checkin.js).
+  gymCheckIns: [],
+  // Off hides the Home attendance card and /checkin route, without deleting the journal.
   checkIn: true,
   // Whether the body-weight summary card is shown on Home. Off only hides that card: existing
   // entries, Stats, imports and the separate pre-workout weigh-in flow keep working.
@@ -209,6 +203,7 @@ function loadState() {
     if (raw) {
       const saved = JSON.parse(raw)
       const s = Object.assign(clone(DEF), saved)
+      s.gymCheckIns = normalizeCheckIns(s.gymCheckIns)
       if (!saved.lang) s.lang = detectedLang()
       return s
     }
@@ -216,11 +211,8 @@ function loadState() {
   return freshState()
 }
 
-// Whether a copy holds anything of its own worth keeping over another: workouts, routines,
-// weigh-ins and custom exercises. A custom exercise is all a new guest may have made — with its
-// photo or video, which the server counts as unreferenced until the state that names it lands —
-// so a profile created from such a copy takes it at once, like one holding a workout.
-const hasData = st => !!((st.workouts || []).length || (st.routines || []).length || (st.bodyweight || []).length || (st.customEx || []).length)
+// Photo-only copies and deletion-only owed journals are profile data too.
+const hasData = st => !!((st.workouts || []).length || (st.routines || []).length || (st.bodyweight || []).length || (st.customEx || []).length || normalizeCheckIns(st.gymCheckIns).length)
 
 // Decide whether a pulled account state may replace the local saved state. A local active workout
 // is deliberately carried forward: the server stores completed/saved state, while the in-progress
@@ -228,6 +220,7 @@ const hasData = st => !!((st.workouts || []).length || (st.routines || []).lengt
 export function restoredStateFor(local, remote, dirty = false) {
   if (!remote || (hasData(local) && (dirty || (remote._ts || 0) < (local._ts || 0)))) return null
   const next = Object.assign(clone(DEF), remote)
+  next.gymCheckIns = normalizeCheckIns(next.gymCheckIns)
   if (local.active) next.active = local.active
   return next
 }
@@ -396,6 +389,7 @@ export const useStore = create((set, get) => {
   // it, and with this clock behind, the change looked older than its own base — unchanged — and
   // a pull replaced it with the server's copy.
   const persist = (S, push = true, stamp = true) => {
+    S.gymCheckIns = normalizeCheckIns(S.gymCheckIns)
     const { base, owed } = metaOf()   // the copy being replaced; the new one stands where it stood
     if (stamp) S._ts = Math.max(Date.now(), (base?.ts || 0) + 1)
     registerCustom(S.customEx)
@@ -777,7 +771,7 @@ export const useStore = create((set, get) => {
     reached()
     let asked = false
     const askAbout = async extras => {
-      if (!(extras.workouts || extras.bodyweight || extras.customEx) || typeof ask !== 'function') return false
+      if (!(extras.workouts || extras.bodyweight || extras.customEx || extras.gymCheckIns) || typeof ask !== 'function') return false
       asked = true
       return !!(await ask(extras))
     }
@@ -864,10 +858,9 @@ export const useStore = create((set, get) => {
     await applyStash()
     return { adopted: true, added: false }
   }
-  // A copy's workouts, weigh-ins and custom exercises split by the names a sign-in recorded when it
-  // began (`pre`, see setUser): `before` holds what was there then, `later` — null when nothing
-  // is — what was logged since, with the custom exercises its workouts use, in this copy's unit.
-  const ADOPT_FIELDS = ['workouts', 'bodyweight', 'customEx']
+  // Journal edits made during held sign-in belong to the new account, even on a pre-existing day.
+  const ADOPT_FIELDS = ['workouts', 'bodyweight', 'customEx', 'gymCheckIns']
+  const adoptionKey = (f, x) => f === 'gymCheckIns' ? `${x.d}|${x._ts}` : entryKey(f, x)
   const splitByPre = (S, pre) => {
     const before = { ...S }
     const later = { _ts: S._ts, unit: S.unit, ...(S.unitSet ? { unitSet: S.unitSet } : {}) }
@@ -875,8 +868,8 @@ export const useStore = create((set, get) => {
     for (const f of ADOPT_FIELDS) {
       const had = new Set(Array.isArray(pre?.[f]) ? pre[f] : [])
       const xs = Array.isArray(S[f]) ? S[f].filter(x => x != null) : []
-      before[f] = xs.filter(x => had.has(entryKey(f, x)))
-      later[f] = xs.filter(x => !had.has(entryKey(f, x)))
+      before[f] = xs.filter(x => had.has(adoptionKey(f, x)))
+      later[f] = xs.filter(x => !had.has(adoptionKey(f, x)))
       if (later[f].length) any = true
     }
     if (!any) return { before, later: null }
@@ -886,7 +879,7 @@ export const useStore = create((set, get) => {
   }
   const preOf = S => {
     const ids = resetIdsOf(S)
-    return Object.fromEntries(ADOPT_FIELDS.map(f => [f, ids[f] || []]))
+    return Object.fromEntries(ADOPT_FIELDS.map(f => [f, f === 'gymCheckIns' ? normalizeCheckIns(S.gymCheckIns).map(x => adoptionKey(f, x)) : ids[f] || []]))
   }
 
   // The file mirror is the durable copy: WebView storage can be evicted while the files
@@ -954,10 +947,8 @@ export const useStore = create((set, get) => {
       stampRoutines(prev.routines, S.routines)
       stampCustomEx(prev.customEx, S.customEx)
       persist(S, push)
-      // A photo or video added to a workout is a change worth the day's backup too: the one
-      // finishing wrote went before the finish screen's pictures (autoBackupNow). Not a removal,
-      // nor a workout deleted: the day's copy then still holds what was taken off, as a backup should.
-      if (MOBILE && S.autoBackup && gainedWorkoutMedia(prev, S)) {
+      // Additions/replacements refresh the daily backup; removals leave its previous photos intact.
+      if (MOBILE && S.autoBackup && gainedBackupMedia(prev, S)) {
         clearTimeout(backupTm)
         backupTm = setTimeout(() => { backupTm = null; get().autoBackupNow() }, AUTO_BACKUP_SOON_MS)
       }
@@ -1046,7 +1037,9 @@ export const useStore = create((set, get) => {
       const next = Object.assign(clone(DEF), backup)
       if (!mergeWith?.state || !get().user) { get().replaceState(next, !!get().user); return }
       const others = mergeWith.local ? mergeStates(get().S, mergeWith.state) : mergeWith.state
-      const merged = keepReset(get().S, Object.assign(clone(DEF), mergeStates(next, others, { prefer: 'a' })))
+      // Explicit restoration belongs to the current reset generation, unlike a stale device copy.
+      keepReset(others, keepReset(get().S, next))
+      const merged = Object.assign(clone(DEF), mergeStates(next, others, { prefer: 'a' }))
       merged.active = next.active || null
       persist(merged, true)
       if (mergeWith.rev != null) writeSync(mergeWith.rev, 0)

@@ -78,10 +78,8 @@ export function mediaLimits(env = process.env) {
 }
 /** The block GET /api/config hands out. Public: the caps are not a secret, and the editor needs
  *  them before the first upload to refuse a file the server would refuse anyway. */
-// `workouts: true`: this server keeps the files a logged workout's `media` names (its GC walks
-// workouts[].media), so a signed-in client may offer attaching them. A server from before says
-// nothing, and the client offers them on custom exercises only.
-export const mediaConfig = l => ({ imageMB: l.imageMB, gifMB: l.gifMB, videoMB: l.videoMB, videoSec: l.videoSec, quotaMB: l.quotaMB, workouts: true });
+// Explicit retention capabilities: older servers must not receive files their GC cannot keep.
+export const mediaConfig = l => ({ imageMB: l.imageMB, gifMB: l.gifMB, videoMB: l.videoMB, videoSec: l.videoSec, quotaMB: l.quotaMB, workouts: true, checkins: true });
 
 /* ---------------------------------------------------------------- errors */
 
@@ -277,8 +275,8 @@ export function mp4Info(fd, size) {
 /* ---------------------------------------------------------------- references */
 
 /**
- * Every blob a state refers to: customEx[].media.hash and .poster.hash, and the same two of every
- * entry of workouts[].media (the photos and videos of a logged workout). Deliberately loose —
+ * Every blob a state refers to: custom exercise media, logged workout media, and live attendance
+ * media, including each poster. Deleted attendance days never retain files. Deliberately loose —
  * each field counts on its own as long as it is a well-formed hash, even when the rest of the ref
  * would not pass the client's normalizeMediaRef, and a workout's list counts past the client's
  * cap of six. This set decides what is KEPT, so erring towards more is the safe direction.
@@ -298,6 +296,9 @@ export function referencedHashes(state) {
   for (const w of Array.isArray(state.workouts) ? state.workouts : []) {
     if (!isObj(w) || !Array.isArray(w.media)) continue;
     for (const m of w.media) if (isObj(m)) ref(m);
+  }
+  for (const e of Array.isArray(state.gymCheckIns) ? state.gymCheckIns : []) {
+    if (isObj(e) && e.deleted !== true && isObj(e.media)) ref(e.media);
   }
   return out;
 }

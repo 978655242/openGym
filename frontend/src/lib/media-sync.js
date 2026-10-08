@@ -103,7 +103,8 @@ export function createMediaSync(deps = {}) {
     let cfg = st.config
     if (!cfg && typeof st.loadConfig === 'function') cfg = await st.loadConfig()
     if (!cfg?.media) { await publishPending({ usage: null }); return }
-    const files = referencedFiles(st.S)
+    // A legacy server's GC cannot retain journal files; they stay pending and durable here.
+    const files = referencedFiles(cfg.media.checkins === true ? st.S : { ...st.S, gymCheckIns: [] })
     const refs = files.map(f => f.hash)
     if (!refs.length) { await publishPending({ deferred: 0, rejected: 0, unavailable: 0 }); return }
     const key = refs.join(',')
@@ -266,10 +267,10 @@ export function createMediaSync(deps = {}) {
    * Deletes the local files nothing needs any more. Live = what the state in memory references,
    * what the saved copy references (another tab may be on an older or newer one), what any stash
    * references, what an open editor holds as its draft (mediaStore.hold), and anything put in the
-   * last hour (a draft abandoned without closing, or another tab's). Signed in, the store is then kept under LOCAL_CACHE_MAX_MB by evicting main files
-   * that are safely on the server, least recently shown first; posters the state references and
-   * pending files are never evicted, and a guest's or a local phone's referenced files are never
-   * evicted at all — for them this is the only copy.
+   * last hour (a draft abandoned without closing, or another tab's). Signed in, evicts synced
+   * workout/custom-exercise mains over LOCAL_CACHE_MAX_MB, least recently shown first.
+   * Live attendance files, stash files, held drafts, posters and pending files are never evicted;
+   * neither are a guest's or local phone's referenced files, since they are the only copy.
    *
    * Not before boot has finished (`ready`): until then the state in memory can be the one
    * localStorage held while the copy boot is about to restore — the phone's file mirror, the
@@ -284,17 +285,25 @@ export function createMediaSync(deps = {}) {
     await withLock('opengym-media', async () => {
       const st = store.getState()
       const live = referencedHashes(st.S)
+      const permanent = referencedHashes({ gymCheckIns: st.S?.gymCheckIns })
+      const keepSaved = saved => {
+        for (const h of referencedHashes(saved)) live.add(h)
+        for (const h of referencedHashes({ gymCheckIns: saved?.gymCheckIns })) permanent.add(h)
+      }
       try {
         const raw = d.storage?.getItem(PERSISTED_KEY)
-        if (raw) for (const h of referencedHashes(JSON.parse(raw))) live.add(h)
+        if (raw) keepSaved(JSON.parse(raw))
       } catch { /* an unreadable copy keeps nothing extra */ }
       try {
-        if (typeof st.stashedMediaHashes === 'function') for (const h of await st.stashedMediaHashes()) live.add(h)
+        // ponytail: stash exposes hashes only; synced there is not proof this server holds a copy.
+        if (typeof st.stashedMediaHashes === 'function') {
+          for (const h of await st.stashedMediaHashes()) { live.add(h); permanent.add(h) }
+        }
       } catch { return }   // the stash could not be read: delete nothing rather than guess
       // A second guard on a phone: the mirror is read even after boot, since a copy that failed
       // to reach localStorage lives only there and in memory, and memory may already have moved on.
       try {
-        if (d.nativeLoad) { const saved = await d.nativeLoad(); if (saved) for (const h of referencedHashes(saved)) live.add(h) }
+        if (d.nativeLoad) { const saved = await d.nativeLoad(); if (saved) keepSaved(saved) }
       } catch { return }   // the mirror could not be read: delete nothing rather than guess
       // A file an open editor holds as its draft is live too, however long the editor has been open.
       const held = r => typeof d.media.isHeld === 'function' && d.media.isHeld(r.hash)
@@ -309,7 +318,7 @@ export function createMediaSync(deps = {}) {
       const posters = new Set(refs.filter(f => f.poster).map(f => f.hash))
       const inState = new Set(refs.map(f => f.hash))
       const candidates = left
-        .filter(r => !r.pending && !posters.has(r.hash) && !held(r) && (r.putAt || 0) < cutoff)
+        .filter(r => !r.pending && !permanent.has(r.hash) && !posters.has(r.hash) && !held(r) && (r.putAt || 0) < cutoff)
         .sort((a, b) => (inState.has(a.hash) - inState.has(b.hash)) || ((a.shownAt || 0) - (b.shownAt || 0)))
       for (const r of candidates) {
         if (bytes <= LOCAL_CACHE_MAX_MB * MB) break

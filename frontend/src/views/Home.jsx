@@ -10,6 +10,8 @@ import Icon from '../components/Icon.jsx'
 import { Button } from '../components/ui.jsx'
 import { tappable } from '../lib/use-sheet-keyboard.js'
 import { glyphOf } from '../lib/glyphs.js'
+import { checkInSummary } from '../lib/checkin.js'
+import { useLocalDay } from '../lib/use-local-day.js'
 
 // Home = what to do now + a quick glance. Deep charts & history live in Stats.
 export default function Home() {
@@ -17,6 +19,8 @@ export default function Home() {
   const S = useStore(s => s.S)
   const user = useStore(s => s.user)
   const [weekOffset, setWeekOffset] = useState(0)
+  useLocalDay()
+  const checkIn = checkInSummary(S)
 
   const today = new Date()
   // A weekday can hold several routines. `todayRoutines` is the whole day; `routine` is the
@@ -113,16 +117,16 @@ export default function Home() {
       </div>}
     </div>
 
-    {/* Jump to the gym check-in cards (QR membership codes). Shown here as a quick tap on
-        arrival at the gym; folds away per user via the "Gym check-in" switch in Settings. */}
+    {/* Daily photo attendance; hiding the card also hides its route. */}
     {S.checkIn !== false && (
       <div className="card tappable" style={{ cursor: 'pointer' }} {...tappable(() => nav('/checkin'))}>
         <div className="row between">
           <div className="row" style={{ gap: 9 }}>
-            <span className="lrow-i" style={{ background: 'var(--blue)' }}><Icon name="qr" /></span>
+            <span className="lrow-i" style={{ background: checkIn.today ? 'var(--green)' : 'var(--blue)' }}><Icon name={checkIn.today ? 'checkCircle' : 'camera'} /></span>
             <div>
-              <div className="lbl2">{t('At the gym')}</div>
-              <div className="ttl">{t('Check in')}</div>
+              <div className="lbl2">{t('Daily check-in')}</div>
+              <div className="ttl">{t(checkIn.today ? 'Checked in today' : 'Not checked in today')}</div>
+              <div className="ss">{t('{0} check-ins', checkIn.total)} · {t('Consecutive days')}: {checkIn.streak}</div>
             </div>
           </div>
           <Icon name="chevronRight" className="chev" />

@@ -67,6 +67,7 @@
 import { beatsWeight } from './exercises.js'
 import { bestWeightForEntry } from './history.js'
 import { convertStateUnit, convertBodyWeight } from './units.js'
+import { mergeCheckIns, normalizeCheckIns } from './checkin.js'
 
 const clone = o => JSON.parse(JSON.stringify(o))
 const list = v => (Array.isArray(v) ? v : [])
@@ -215,7 +216,7 @@ const workoutTime = w => Number(w?._ts) || Number(w?.end) || Number(w?.start) ||
 const bodyweightKey = e => `${e?.d}|${e?.t ?? ''}`
 const RESET_LISTS = {
   workouts: workoutKey, routines: x => x?.id, customEx: x => x?.id, bodyweight: bodyweightKey,
-  gymCards: x => x?.id, equipProfiles: x => x?.id, favEx: x => x,
+  gymCards: x => x?.id, gymCheckIns: x => x?.d, equipProfiles: x => x?.id, favEx: x => x,
 }
 const RESET_MAPS = ['exNotes', 'barWeights', 'balanceOverrides', 'loadKind', 'plates']
 /** An entry's name in resetIds: a workout's id (or day and start), a weigh-in's day and time, … */
@@ -258,7 +259,7 @@ export function sinceReset(S, at, ids) {
   if (ids && typeof ids === 'object') {
     for (const [f, key] of Object.entries(RESET_LISTS)) {
       const gone = new Set(list(ids[f]).map(String))
-      if (Array.isArray(S[f])) out[f] = clone(S[f].filter(x => x == null || !gone.has(String(key(x)))))
+      if (Array.isArray(S[f])) out[f] = clone(S[f].filter(x => x == null || !gone.has(String(key(x))) || (f === 'gymCheckIns' && Number(x._ts) > at)))
     }
     for (const f of RESET_MAPS) {
       const gone = new Set(list(ids[f]).map(String))
@@ -270,6 +271,7 @@ export function sinceReset(S, at, ids) {
     out.routines = list(S.routines).filter(r => r && after(r._ts))
     out.customEx = list(S.customEx).filter(c => c && after(c._ts))
     out.bodyweight = list(S.bodyweight).filter(e => e && after(e.t))
+    out.gymCheckIns = normalizeCheckIns(S.gymCheckIns).filter(e => after(e._ts))
     // No time of their own: taken for what they were before the reset, which cleared them.
     out.equipProfiles = []
     out.gymCards = []
@@ -296,8 +298,13 @@ export function sinceReset(S, at, ids) {
 // on sign-in the server's profile is the truth and the device only contributes the entries it
 // logged while signed out. Without it the newer copy decides, as for a conflict between devices.
 export function mergeStates(a0, b0, { prefer } = {}) {
-  if (!a0) return b0 ? clone(b0) : b0
-  if (!b0) return clone(a0)
+  if (!a0 || !b0) {
+    const only = a0 || b0
+    if (!only) return only
+    const out = clone(only)
+    if ('gymCheckIns' in out) out.gymCheckIns = normalizeCheckIns(out.gymCheckIns)
+    return out
+  }
   let a = a0, b = b0
   // A reset seen by one copy only: the other keeps what was made after it, and the reset copy
   // decides the rest (the file's header).
@@ -306,6 +313,13 @@ export function mergeStates(a0, b0, { prefer } = {}) {
   if (!prefer) {
     if (ra > rb) { b = sinceReset(b, ra, a.resetIds); side = 'a' }
     else if (rb > ra) { a = sinceReset(a, rb, b.resetIds); side = 'b' }
+  }
+  // Adding device data at sign-in must not bypass an attendance reset.
+  if (prefer && ra !== rb) {
+    const stale = ra > rb ? b : a, reset = ra > rb ? a : b
+    const gone = reset.resetIds && typeof reset.resetIds === 'object' ? new Set(list(reset.resetIds.gymCheckIns).map(String)) : null
+    const gymCheckIns = normalizeCheckIns(stale.gymCheckIns).filter(e => e._ts > Math.max(ra, rb) || (gone && !gone.has(e.d)))
+    if (ra > rb) b = { ...b, gymCheckIns }; else a = { ...a, gymCheckIns }
   }
   // The reset stamp only moves forward, with the names it wiped — with `prefer` too.
   const resetAt = Math.max(ra, rb)
@@ -360,6 +374,8 @@ export function mergeStates(a0, b0, { prefer } = {}) {
     }
   }
   out.workouts.sort(byDayStart)
+  // Attendance always uses its own edit time, including during profile adoption.
+  out.gymCheckIns = mergeCheckIns(a.gymCheckIns, b.gymCheckIns)
   for (const f of ['routines', 'customEx', 'equipProfiles', 'gymCards']) {
     if (list(n[f]).length || list(o[f]).length) out[f] = unionById(n[f], o[f]).map(clone)
   }
@@ -477,9 +493,14 @@ export function localExtras(local, server) {
   const from = unitOf(local), to = unitOf(server)
   const differs = (mine, theirs) =>
     (Number(mine.t) || 0) > (Number(theirs.t) || 0) && Number(convertBodyWeight(mine.w, from, to)) !== Number(theirs.w)
+  const journal = normalizeCheckIns(server?.gymCheckIns)
+  const journalByDay = new Map(journal.map(e => [e.d, e]))
+  const gymCheckIns = mergeCheckIns(local?.gymCheckIns, journal)
+    .filter(e => JSON.stringify(e) !== JSON.stringify(journalByDay.get(e.d))).length
   return {
     workouts: list(local?.workouts).filter(w => !have.has(workoutKey(w))).length,
     bodyweight: list(local?.bodyweight).filter(e => e && e.d != null && (!days.has(e.d) || differs(e, days.get(e.d)))).length,
-    customEx: list(local?.customEx).filter(e => e && !ex.has(e.id)).length
+    customEx: list(local?.customEx).filter(e => e && !ex.has(e.id)).length,
+    ...(gymCheckIns ? { gymCheckIns } : {}),
   }
 }

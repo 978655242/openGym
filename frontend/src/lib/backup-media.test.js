@@ -121,3 +121,30 @@ describe('a workout\'s photos and videos in the zip', () => {
     expect(await into.get(v.hash)).toMatchObject({ mime: 'video/mp4', pending: true })
   })
 })
+
+describe('daily attendance photos in backups', () => {
+  it('roundtrips the live journal photo while excluding a deleted day’s files', async () => {
+    const bytes = jpeg(), photo = await refFor(bytes, 'image/jpeg')
+    const media = createMediaStore(memoryBackend())
+    await media.put(photo.hash, new Blob([bytes]), { mime: photo.mime })
+    const S = { ...stateWith([]), gymCheckIns: [
+      { id: '2026-10-07', d: '2026-10-07', at: 1, _ts: 2, media: photo },
+      { id: '2026-10-08', d: '2026-10-08', at: 1, _ts: 3, deleted: true, media: { ...photo, hash: 'e'.repeat(64) } },
+    ] }
+    const out = await exportBackupZip(S, { media })
+    expect(out).toMatchObject({ included: 1, missing: 0 })
+    const read = await readBackupFile(new File([out.blob], 'attendance.zip'))
+    expect(read.state.gymCheckIns[0].media).toEqual(photo)
+    expect(read.state.gymCheckIns[1]).not.toHaveProperty('media')
+    const restored = createMediaStore(memoryBackend())
+    expect(await storeBackupMedia(read.files, { media: restored })).toEqual({ stored: 1, skipped: 0 })
+    expect(new Uint8Array(await (await restored.get(photo.hash)).blob.arrayBuffer())).toEqual(bytes)
+  })
+  it('normalizes imported days, dropping invalid dates and non-still media', async () => {
+    const photo = await refFor(jpeg(), 'image/jpeg')
+    const day = { id: 'legacy', d: '2026-10-08', at: 1, _ts: 2, media: photo }
+    const S = { ...stateWith([]), gymCheckIns: [day, { ...day, _ts: 3 }, { ...day, d: '2026-02-30' }, { ...day, d: '2026-10-07', media: await refFor(mp4().file, 'video/mp4', 'video') }] }
+    const read = await readBackupFile(new File([JSON.stringify(S)], 'attendance.json'))
+    expect(read.state.gymCheckIns).toEqual([{ ...day, id: day.d, _ts: 3 }])
+  })
+})

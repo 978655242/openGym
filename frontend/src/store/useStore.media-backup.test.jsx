@@ -71,3 +71,11 @@ describe('auto-backup and a workout\'s photos and videos', () => {
     expect(backups()).toHaveLength(0)
   })
 })
+
+it('a new attendance photo triggers the phone’s automatic daily backup', async () => {
+  useStore.setState({ S: { ...clone(DEF), autoBackup: true, gymCheckIns: [] }, user: null, ready: true })
+  useStore.getState().update(s => { s.gymCheckIns = [{ id: '2026-10-08', d: '2026-10-08', at: 1, _ts: 2, media: ref('a') }] })
+  await sleep(2300)
+  expect(backups()).toHaveLength(1)
+  expect(backups()[0].gymCheckIns[0].media.hash).toBe('a'.repeat(64))
+})

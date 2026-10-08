@@ -280,3 +280,18 @@ test('a photo taken off a workout is marked by the next state push and swept aft
   assert.deepEqual(h.store.sweep('u1'), { removed: 1, freedBytes: 2000, skipped: false });
   assert.deepEqual(h.files('u1'), [`${a}.jpg`]);
 });
+
+test('a live attendance photo never expires; deletion releases it after the normal grace', t => {
+  const h = setup(t);
+  const hash = h.place('u1', M.jpeg());
+  const entry = { id: '2026-10-08', d: '2026-10-08', at: 1, _ts: 1, media: { hash } };
+  h.S.set('u1', { gymCheckIns: [entry] });
+  h.store.noteState('u1', h.S.get('u1'));
+  h.clock.t += 400 * DAY;
+  assert.equal(h.store.sweep('u1').removed, 0);
+  assert.equal(h.store.has('u1', hash), true);
+  h.S.set('u1', { gymCheckIns: [{ ...entry, deleted: true, _ts: 2 }] });
+  h.store.noteState('u1', h.S.get('u1'));
+  h.clock.t += 14 * DAY;
+  assert.equal(h.store.sweep('u1').removed, 1);
+});

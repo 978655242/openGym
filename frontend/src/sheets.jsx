@@ -71,23 +71,25 @@ function ConfirmDialog({ title, message, confirmText, cancelText, danger, onConf
 }
 // "1 workouts and 1 weigh-ins" read wrong: a count of one takes the singular, per noun. Four
 // whole sentences rather than two spliced counts, so every language keeps its own word order.
-export function addDeviceDataMessage(workouts, weighIns) {
+export function addDeviceDataMessage(workouts, weighIns, checkIns = 0) {
   const one = n => Number(n) === 1
-  return one(workouts)
+  const journal = checkIns > 0 ? t('{0} photo check-in changes were made on this device while signed out. Add them to your profile, or keep the profile exactly as it is on the server.', checkIns) : ''
+  if (journal && !workouts && !weighIns) return journal
+  const training = one(workouts)
     ? one(weighIns)
       ? t('{0} workout and {1} weigh-in were logged on this device while signed out. Add them to your profile, or keep the profile exactly as it is on the server.', workouts, weighIns)
       : t('{0} workout and {1} weigh-ins were logged on this device while signed out. Add them to your profile, or keep the profile exactly as it is on the server.', workouts, weighIns)
     : one(weighIns)
       ? t('{0} workouts and {1} weigh-in were logged on this device while signed out. Add them to your profile, or keep the profile exactly as it is on the server.', workouts, weighIns)
       : t('{0} workouts and {1} weigh-ins were logged on this device while signed out. Add them to your profile, or keep the profile exactly as it is on the server.', workouts, weighIns)
+  return journal ? training + '\n\n' + journal : training
 }
-// Sign-in found workouts on this device that the profile does not have (logged while signed
-// out). The profile is the truth — settings and plan come from the server either way — the
-// question is only whether these entries are added to it or dropped. Resolves true to add.
+// Sign-in found device entries that the profile does not have. Server settings and plan win;
+// this question only controls whether signed-out training and photo attendance are added.
 export function askAddDeviceData(extras) {
   return new Promise(resolve => confirmSheet({
-    title: t('Add this device\'s workouts to your profile?'),
-    message: addDeviceDataMessage(extras.workouts, extras.bodyweight),
+    title: extras.gymCheckIns ? t("Add this device's data to your profile?") : t('Add this device\'s workouts to your profile?'),
+    message: addDeviceDataMessage(extras.workouts, extras.bodyweight, extras.gymCheckIns),
     confirmText: t('Add them'), cancelText: t('Keep profile as is'),
     onConfirm: () => resolve(true), onCancel: () => resolve(false), locked: true
   }))

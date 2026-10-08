@@ -26,6 +26,7 @@ const LISTS = {
   b: ['bodyweight', e => e?.d],
   r: ['routines', r => r?.id],
   c: ['customEx', e => e?.id],
+  g: ['gymCheckIns', e => e?.d],
 }
 // Not content: the stamp and the revision say when, not what; the running workout never syncs.
 const NOT_CONTENT = new Set(['_ts', '_rev', 'active', ...Object.values(LISTS).map(([f]) => f)])

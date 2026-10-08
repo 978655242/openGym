@@ -96,9 +96,13 @@ Where the phone keeps things, in case you ever need them by hand:
   the copies versions before 1.3.9 wrote straight into `Documents/`, stay until you remove
   them yourself. Settings → **Import backup** reads any of them back, wherever it is.
 
-### Photos and videos of your own exercises
+### Photos, workout media and daily check-ins
 
 An exercise you create can carry one photo, GIF or short video, and a link to a video or guide.
+Logged workouts can carry photos and videos too. **Daily check-in** on Home accepts one still
+gym photo per local calendar date, from the camera or album. Only today can be replaced or
+deleted; past check-ins are read-only. Honors use cumulative dates (7, 30, 100, 365), independently
+of the consecutive-day streak. There is no historical backfill or photo-authenticity check.
 The file is prepared on the phone before it is kept anywhere: a photo is re-encoded (at most
 1600 px, WebP or JPEG — the location and camera data a phone writes into a photo do not
 survive), a GIF loses its comment and metadata blocks, and an MP4/MOV keeps its picture and
@@ -112,6 +116,11 @@ never stored.
 - **Local mode:** that folder is the only copy. **Export with photos & videos (.zip)** in
   Settings → Data writes a zip with the usual JSON backup and every file, through the share
   sheet; **Import backup** takes that zip back. The daily auto-backup stays JSON only.
+- **Check-in retention:** journal photos have no automatic expiry and are excluded from the
+  signed-in media-cache size cap. They remain while their records remain; resetting all data,
+  deleting the profile or clearing/uninstalling the app is not a backup. Paired servers must
+  advertise `media.checkins: true`; older servers do not offer photo check-in. The same ZIP
+  export/import includes check-in photos, while the daily automatic backup remains JSON only.
 - **Paired with a server:** files go up to the server (`PUT /api/media/{hash}`) and come down
   with the phone's token into the same folder, so they show offline too. A file that has not
   reached the server yet is owed like an unsynced change: **Disconnect** says so and keeps it.
@@ -121,7 +130,7 @@ never stored.
   app's whole backup past 25 MB, and a few videos would take the state file down with them. A
   device-to-device transfer keeps it. iOS includes Library in iCloud and computer backups.
 - **Permissions:** Android already has the camera. iOS asks for the camera
-  (`NSCameraUsageDescription`, now also for photos and videos of exercises) and, to record a
+  (`NSCameraUsageDescription`, for daily check-ins, exercise and workout photos) and, to record a
   video with sound from the picker, the microphone (`NSMicrophoneUsageDescription`).
 
 Worth checking on a real device after changes here, since no test runs a WebView: a short

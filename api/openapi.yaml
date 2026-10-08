@@ -145,9 +145,9 @@ tags:
     description: Admin dashboard — requires an admin session (`ADMIN_UIDS` or `admin:true`)
   - name: media
     description: >-
-      The photo, GIF or video of a user's own custom exercise, and the photos and videos
-      attached to a logged workout. Stored per profile (one quota for both) and named
-      by the SHA-256 of its bytes; the state only carries a `MediaRef`. Every route here is a
+      Custom-exercise media, photos and videos attached to logged workouts, and daily
+      gym check-in photos. Stored per profile (one shared quota) and named by the SHA-256
+      of their bytes; the state only carries a `MediaRef`. Every route here is a
       404 when the instance runs with `MEDIA_UPLOADS=0`.
   - name: coach
     description: >-
@@ -3197,6 +3197,25 @@ components:
           type: array
           description: User-created exercises (id, name, muscles…).
           items: { $ref: '#/components/schemas/CustomExercise' }
+        gymCheckIns:
+          type: array
+          description: >-
+            Daily gym-photo journal. The app keeps one entry per local date, allows only
+            today's photo to be replaced or deleted, and merges by each entry's `_ts`.
+            A deleted day is a tombstone without media; it prevents stale devices from
+            restoring the attendance. Live photos have no automatic expiry.
+          items:
+            type: object
+            required: [id, d, at, _ts]
+            properties:
+              id: { type: string, description: Same local calendar date as d. }
+              d: { type: string, format: date }
+              at: { type: number, description: Original check-in time in epoch ms. }
+              _ts: { type: number, description: Last edit time in epoch ms. }
+              media:
+                $ref: '#/components/schemas/MediaRef'
+                description: A still-image ref on a live day; absent on a deletion tombstone.
+              deleted: { type: boolean, description: 'true means this day was deleted.' }
         exWeights:
           type: object
           description: 'Per-exercise last/best weight memory: exercise id → {w, d}.'
@@ -3251,9 +3270,9 @@ components:
       type: object
       description: >-
         What the state knows of an uploaded file. The bytes are behind
-        `GET /api/media/{hash}`; the server keeps a file as long as some `customEx[].media.hash`,
-        `workouts[].media[].hash` or `.poster.hash` of either in the profile's state names it, and
-        for `MEDIA_GC_GRACE_DAYS` after.
+        `GET /api/media/{hash}`; the server keeps a file while `customEx[].media.hash`,
+        `workouts[].media[].hash`, a live `gymCheckIns[].media.hash`, or a poster of any such
+        ref names it in the profile's state, and for `MEDIA_GC_GRACE_DAYS` after removal.
       required: [kind, hash, mime, size, width, height, at]
       properties:
         kind: { type: string, enum: [image, gif, video], description: '`gif` means animated; a one-frame GIF is an `image`.' }
@@ -3293,7 +3312,13 @@ components:
             This instance keeps the files a logged workout's `media` list names too, not only a
             custom exercise's. Absent on an instance from before; the app then offers photos and
             videos on custom exercises only.
-      example: { imageMB: 2, gifMB: 8, videoMB: 40, videoSec: 60, quotaMB: 200, workouts: true }
+        checkins:
+          type: boolean
+          const: true
+          description: >-
+            This instance retains live gymCheckIns media and posters during garbage collection.
+            Absent on older servers; the app must not upload journal photos to them.
+      example: { imageMB: 2, gifMB: 8, videoMB: 40, videoSec: 60, quotaMB: 200, workouts: true, checkins: true }
 
     MediaUsage:
       type: object

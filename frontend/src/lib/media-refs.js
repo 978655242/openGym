@@ -111,12 +111,11 @@ export function workoutMediaOf(w, max = WORKOUT_MEDIA_MAX) {
 }
 
 /**
- * Every MediaRef-like object a state holds, as it stands (not normalised): each custom
- * exercise's `media` and each entry of each logged workout's `media` list. The one walk behind
- * referencedHashes, referencedFiles and the owed count, so they can never disagree about where
- * media live. The session in progress is not walked: it never syncs (the server drops `active`),
- * media are only ever attached to a saved workout, and the history editor's copy of one leaves
- * them on the saved record (lib/session-edit.js).
+ * Every MediaRef-like object a state holds, as it stands (not normalised): custom exercises,
+ * logged workout media and live attendance photos. The one walk behind referencedHashes,
+ * referencedFiles and the owed count, so retention and pending uploads agree.
+ * Deleted attendance days hold no live media. The session in progress is not walked:
+ * it never syncs (the server drops `active`), and saved workout editors retain their refs.
  */
 export function stateMediaRefs(state) {
   const out = []
@@ -129,15 +128,18 @@ export function stateMediaRefs(state) {
     if (!isObj(w) || !Array.isArray(w.media)) continue
     for (const m of w.media) if (isObj(m)) out.push(m)
   }
+  for (const e of Array.isArray(state.gymCheckIns) ? state.gymCheckIns : []) {
+    if (isObj(e) && e.deleted !== true && isObj(e.media)) out.push(e.media)
+  }
   return out
 }
 
 /**
  * Every blob hash a state refers to, the same answer as api/media.js referencedHashes (the shared
- * fixture api/test/fixtures/media-refs.json pins both): customEx[].media and every entry of
- * workouts[].media. Deliberately looser than normalizeMediaRef and workoutMediaOf: each hash and
- * poster hash counts on its own as long as it is well-formed, and a workout's list counts past
- * its cap, because this set decides what is KEPT, and keeping too much is the safe side.
+ * fixture api/test/fixtures/media-refs.json pins both): custom exercises, logged workouts and
+ * live attendance days. Deliberately looser than normalization: each main/poster hash counts
+ * on its own when well-formed, and workout lists count past their cap.
+ * This set decides what is KEPT, and keeping too much is the safe side.
  */
 export function referencedHashes(state) {
   const out = new Set()

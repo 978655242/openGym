@@ -661,3 +661,51 @@ describe('localExtras and the weigh-ins of a day both copies have', () => {
     expect(localExtras({ unit: 'lb', bodyweight: [{ d: '2026-09-27', w: convertBodyWeight(80, 'kg', 'lb'), t: 200 }] }, server).bodyweight).toBe(0)
   })
 })
+
+describe('daily photo journal sync', () => {
+  const photo = hash => ({ kind: 'image', hash: hash.repeat(64), mime: 'image/jpeg', size: 10, width: 4, height: 3, at: 1 })
+  const day = (d, ts, hash = 'a') => ({ id: d, d, at: 1, _ts: ts, media: photo(hash) })
+  it('keeps the latest day edit independently of document timestamps and adoption preference', () => {
+    const a = base({ _ts: 900, gymCheckIns: [day('2026-10-08', 100)] })
+    const b = base({ _ts: 200, gymCheckIns: [day('2026-10-08', 300, 'b'), day('2026-10-07', 50)] })
+    for (const prefer of [undefined, 'a', 'b']) {
+      const out = mergeStates(a, b, { prefer })
+      expect(out.gymCheckIns).toHaveLength(2)
+      expect(out.gymCheckIns.find(e => e.d === '2026-10-08').media.hash).toBe('b'.repeat(64))
+    }
+  })
+  it('cannot resurrect a deleted day from an older offline copy, including timestamp ties', () => {
+    const old = base({ _ts: 900, gymCheckIns: [day('2026-10-08', 300)] })
+    const gone = { id: '2026-10-08', d: '2026-10-08', at: 1, _ts: 300, deleted: true }
+    const deleted = base({ _ts: 100, gymCheckIns: [gone] })
+    expect(mergeStates(old, deleted).gymCheckIns).toEqual([gone])
+    expect(mergeStates(deleted, old).gymCheckIns).toEqual([gone])
+  })
+  it('reset ids wipe known journal days without discarding a day created on another device', () => {
+    const wiped = day('2026-10-07', 50), fresh = day('2026-10-08', 60, 'b')
+    const resetIds = resetIdsOf(base({ gymCheckIns: [wiped] }))
+    expect(resetIds.gymCheckIns).toEqual(['2026-10-07'])
+    const reset = base({ resetAt: 100, resetIds, gymCheckIns: [] })
+    for (const prefer of [undefined, 'a', 'b']) {
+      expect(mergeStates(reset, base({ gymCheckIns: [wiped, fresh] }), { prefer }).gymCheckIns).toEqual([fresh])
+    }
+    expect(sinceReset(base({ gymCheckIns: [wiped, day('2026-10-08', 150)] }), 100).gymCheckIns.map(e => e.d)).toEqual(['2026-10-08'])
+  })
+  it('keeps post-reset edits and deletions on a reused calendar date during sync and adoption', () => {
+    const wiped = day('2026-10-08', 50)
+    const reset = base({ resetAt: 100, resetIds: resetIdsOf(base({ gymCheckIns: [wiped] })), gymCheckIns: [] })
+    for (const later of [day(wiped.d, 150, 'b'), { id: wiped.d, d: wiped.d, at: 1, _ts: 150, deleted: true }]) {
+      const offline = base({ gymCheckIns: [later] })
+      for (const prefer of [undefined, 'a', 'b']) {
+        expect(mergeStates(reset, offline, { prefer }).gymCheckIns).toEqual([later])
+        expect(mergeStates(offline, reset, { prefer }).gymCheckIns).toEqual([later])
+      }
+    }
+  })
+  it('offers a photo-only device journal and a newer same-day replacement for adoption', () => {
+    const local = base({ gymCheckIns: [day('2026-10-08', 200)] })
+    expect(localExtras(local, null).gymCheckIns).toBe(1)
+    expect(localExtras(local, base({ gymCheckIns: [day('2026-10-08', 100, 'b')] })).gymCheckIns).toBe(1)
+    expect(localExtras(local, local).gymCheckIns || 0).toBe(0)
+  })
+})

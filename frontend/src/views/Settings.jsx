@@ -384,9 +384,9 @@ export default function Settings() {
           options={[{ value: MONDAY, label: t('Monday') }, { value: SUNDAY, label: t('Sunday') }]}
           value={weekStartOf(S)} onChange={v => update(s => { s.weekStart = v })} />
       </Row>
-      {/* Membership QR codes on Home (views/CheckIn.jsx); off = no Home card, no route. */}
-      <Row icon="qr" iconTint="var(--blue)" title={t('Gym check-in')}
-        subtitle={t('Show a card on Home with your membership QR codes.')}>
+      {/* Daily photo attendance on Home; off hides the card and route, not its records. */}
+      <Row icon="camera" iconTint="var(--blue)" title={t('Gym check-in')}
+        subtitle={t('Show daily photo check-in and honors on Home.')}>
         <Switch checked={S.checkIn !== false} onChange={v => update(s => { s.checkIn = v })} />
       </Row>
       {/* The Home summary is optional; hiding it leaves weight logging, history and Stats intact. */}

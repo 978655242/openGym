@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Gym check-in is now a daily photo journal instead of saved membership QR codes: camera or
+  album, one local date at a time, today-only replacement/deletion, and a monthly review calendar
+  with marked check-in dates that open read-only photo details. Consecutive-day tracking and
+  cumulative honors cover 7, 30, 100 and 365 dates, with completion rings and earned checkmarks
+  instead of visible status text. Journal photos have no automatic expiry, survive local cache
+  pressure and travel with media ZIP backups.
+  The API advertises check-in retention before the app sends photos; legacy QR data stays archived.
 - The Chinese exercise library now displays translated names for the built-in exercise catalogue.
 
 

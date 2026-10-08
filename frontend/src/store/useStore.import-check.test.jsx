@@ -79,4 +79,18 @@ describe('importing a backup over a profile that moved on', () => {
     expect(put.baseRev).toBeUndefined()
     expect(ids(put.state.workouts)).toEqual(['w1', 'w2'])
   })
+
+  it('restores backed-up check-in photos after a reset while merging newer workouts', async () => {
+    const photo = { kind: 'image', hash: 'a'.repeat(64), mime: 'image/jpeg', size: 10, width: 4, height: 3, at: 1 }
+    const entry = { id: '2026-10-08', d: '2026-10-08', at: 1, _ts: 50, media: photo }
+    const server = { ...clone(SERVER), resetAt: 100, resetIds: { gymCheckIns: [entry.d] } }
+    signedIn(clone(server), 7)
+    api.mockResolvedValueOnce({ ok: true, rev: 8 })
+    useStore.getState().importBackup({ ...clone(BACKUP), gymCheckIns: [entry] }, { mergeWith: { state: server, rev: 7 } })
+    await useStore.getState().pushState()
+    const restored = puts().at(-1).state
+    expect(restored.gymCheckIns).toEqual([entry])
+    expect(ids(restored.workouts)).toEqual(['w1', 'w2', 'elsewhere'])
+    expect(restored.resetAt).toBe(100)
+  })
 })

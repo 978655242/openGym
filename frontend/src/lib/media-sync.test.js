@@ -456,3 +456,35 @@ describe('a workout\'s photos and videos', () => {
     } finally { stop() }
   })
 })
+
+describe('permanent attendance photo retention', () => {
+  it('uploads attendance files only when the server advertises check-in retention', async () => {
+    const S = { gymCheckIns: [{ id: '2026-10-08', d: '2026-10-08', at: 1, _ts: 1, media: refOf(hex('a')) }] }
+    await put(hex('a'))
+    await make(appStore({ S })).syncMedia()
+    expect(apiUpload).not.toHaveBeenCalled()
+    expect([...media.pendingNow()]).toEqual([hex('a')])
+    await make(appStore({ S, config: { media: { checkins: true } } })).syncMedia()
+    expect(apiUpload).toHaveBeenCalledTimes(1)
+    expect(apiUpload.mock.calls[0][0]).toBe('/api/media/' + hex('a'))
+  })
+  it('keeps synced journal mains above the cache cap, in memory, persisted state and the native mirror', async () => {
+    const entry = hash => ({ id: '2026-10-08', d: '2026-10-08', at: 1, _ts: 1, media: refOf(hash) })
+    for (const c of 'abc') {
+      await put(hex(c), 110 * MB)
+      await media.markSynced(hex(c))
+    }
+    clock += 400 * 86400000
+    storage.setItem('gym_state_v1', JSON.stringify({ gymCheckIns: [entry(hex('b'))] }))
+    const store = appStore({ S: { gymCheckIns: [entry(hex('a'))] } })
+    await make(store, { nativeLoad: async () => ({ gymCheckIns: [entry(hex('c'))] }) }).localMediaGc()
+    expect((await media.list()).map(r => r.hash).sort()).toEqual(['a', 'b', 'c'].map(hex))
+  })
+  it('releases deleted journal photos after the existing unreferenced-file grace', async () => {
+    await put(hex('a'))
+    clock += 2 * 3600000
+    const S = { gymCheckIns: [{ d: '2026-10-08', deleted: true, media: refOf(hex('a')) }] }
+    await make(appStore({ S, user: null })).localMediaGc()
+    expect(await media.has(hex('a'))).toBe(false)
+  })
+})
