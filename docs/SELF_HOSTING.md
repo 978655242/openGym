@@ -46,6 +46,35 @@ curl http://localhost:8080/api/health      # {"ok":true,...}
 
 Logs: `docker compose logs -f`. Stop: `docker compose down`.
 
+### Optional local Vital Animations videos
+
+If you have downloaded the Vital Animations Free50 pack, import it from the repository
+root before building your own web image (Node 20+ is needed for this optional step):
+
+```bash
+node scripts/import-vitalanimations.mjs "/path/to/VitalAnimations"
+docker compose up -d --build
+```
+
+Pass the extracted directory containing `Free50/50gymworkouts.json` and
+`Free50/Free50/*.mp4`; quote paths containing spaces. The importer validates all 50
+metadata IDs and required videos before copying anything to the gitignored
+`frontend/public/video/vitalanimations/`. It never overwrites existing files or
+changes the source pack, exercise IDs, history, metadata or localized instructions.
+The supplier's English instructions are not imported.
+
+Vite copies these local public assets into web builds, and the local Docker web
+image includes them; prebuilt public images do not supply the pack. Only existing
+exercises with a semantic match use the videos; unmatched exercises retain their
+original GIFs, so keep the existing `media` service / `scripts/fetch-media.sh`.
+
+**License limits:** the supplier's [README](https://github.com/exercisedb-pro/exercisedb-dataset)
+says the free pack has the same commercial license terms as paid packages and
+forbids raw dataset redistribution. These assets are **not AGPL**. You are responsible
+for complying with the pack's terms when using the videos inside your own project.
+Do not commit or publish raw media, or publish container images containing this
+local pack. Keep it out of openGym's public release artifacts.
+
 ## 2. Understand the passkey requirement (important)
 
 openGym signs you in with **passkeys** (WebAuthn). Browsers enforce two rules:

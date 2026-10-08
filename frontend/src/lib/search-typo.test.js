@@ -1,5 +1,7 @@
 import { expect, it } from 'vitest'
 import { EXDB, matchExercise, normalizeStr, searchExercises } from './exercises.js'
+import { _setLangState } from './i18n-core.js'
+import zhNames from '../exercise-names/zh.js'
 
 const benchPress = {
   n: 'dumbbell bench press', bp: 'chest', tg: 'pectorals', eq: 'dumbbell',
@@ -80,4 +82,14 @@ it('finds a name typed with its words run together or hyphenated', () => {
   expect(matchExercise(benchPress, 'dumbbellbenchpress')).toBe(true)
   // Only the name is run together: a body part and equipment word do not fuse into one.
   expect(matchExercise(benchPress, 'chestdumbbell')).toBe(false)
+})
+
+it('finds the mapped Vital squat by its Chinese and English names', () => {
+  try {
+    _setLangState('zh', {}, null, zhNames)
+    expect(searchExercises(EXDB, '杠铃深蹲').map(e => e.id)).toContain('0043')
+    expect(searchExercises(EXDB, 'barbell squat').map(e => e.id)).toContain('0043')
+  } finally {
+    _setLangState('en', {}, null, null)
+  }
 })

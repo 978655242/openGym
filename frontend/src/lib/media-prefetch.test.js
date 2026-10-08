@@ -9,8 +9,8 @@ import { EXIDX, imgSrc, gifSrc } from './exercises.js'
 
 const BASE = 'https://gym.test/app/'
 const abs = src => new URL(src, BASE).href
-const bench = EXIDX['0025'] || Object.values(EXIDX).find(e => e.gif)
-const other = Object.values(EXIDX).find(e => e.gif && e.id !== bench.id)
+const bench = Object.values(EXIDX).find(e => e.gif && !e.video)
+const other = Object.values(EXIDX).find(e => e.gif && !e.video && e.id !== bench.id)
 
 const answer = (status = 200) => ({ ok: status < 400, status, arrayBuffer: async () => new ArrayBuffer(1) })
 const cacheWith = urls => ({ match: async u => (urls.includes(u) ? {} : undefined) })
@@ -27,6 +27,14 @@ describe('planMediaUrls', () => {
     expect(urls.sort()).toEqual([abs(gifSrc(bench)), abs(imgSrc(bench)), abs(gifSrc(other)), abs(imgSrc(other))].sort())
   })
 
+  it('prefetches the matched MP4 instead of the old GIF while retaining its thumbnail', () => {
+    const index = { squat: { id: 'squat', video: '0054.mp4', gif: 'squat.gif', img: 'squat.jpg' } }
+    const S = { routines: [{ ex: [{ id: 'squat' }] }] }
+    expect(planMediaUrls(S, BASE, index).sort()).toEqual([
+      BASE + 'img/squat.jpg',
+      BASE + 'video/vitalanimations/0054.mp4',
+    ].sort())
+  })
   it('an empty or missing plan needs nothing', () => {
     expect(planMediaUrls({}, BASE)).toEqual([])
     expect(planMediaUrls(null, BASE)).toEqual([])
@@ -38,6 +46,7 @@ describe('planMediaUrls', () => {
     vi.resetModules()
     vi.stubEnv('VITE_IMG_BASE', 'https://cdn.test/images/')
     vi.stubEnv('VITE_GIF_BASE', 'https://cdn.test/videos/')
+    vi.stubEnv('VITE_VIDEO_BASE', 'https://cdn.test/mp4/')
     try {
       const fresh = await import('./media-prefetch.js')
       expect(fresh.planMediaUrls({ routines: [{ ex: [{ id: bench.id }] }] }, BASE)).toEqual([])

@@ -1,16 +1,18 @@
 import { EXDB } from './exercises-data.js'
 import { USER_EXERCISE_MUSCLE_OVERRIDES, exerciseMuscleMetadataFor } from './exercise-muscle-batch-1.js'
 import { t, getVersion, exerciseNameSearchText } from './i18n-core.js'
+import { VITAL_VIDEOS } from './vitalanimations.js'
 
 export { EXDB }
 
 // The generated dataset remains the compatibility/raw export. The runtime catalogue applies
-// owner-approved muscle metadata as a narrow overlay, so imports and historical tests that rely
-// on the upstream shape keep working while EXIDX and pickers see the corrected model.
+// muscle metadata and matched local videos as narrow overlays, without changing persisted IDs
+// or instructions. Imports keep the upstream shape; EXIDX and pickers see the runtime catalogue.
 const catalogueExercise = ex => {
   const metadata = exerciseMuscleMetadataFor(ex?.id)
-  if (!Object.keys(metadata).length) return ex
-  const out = { ...ex, ...metadata }
+  const video = VITAL_VIDEOS[ex?.id]
+  if (!Object.keys(metadata).length && !video) return ex
+  const out = { ...ex, ...metadata, ...(video ? { video } : {}) }
   const user = USER_EXERCISE_MUSCLE_OVERRIDES[ex?.id] || {}
   // A future dataset row may carry explicit arrays of its own; preserve those over generated
   // defaults unless the owner has deliberately supplied a correction for the same field.
@@ -125,15 +127,16 @@ export function matchesExerciseSearch(exercise, query) {
   return searchScore(exercise, query) > 0
 }
 
-// Media normally sits next to the app (img/ and gif/, mounted into the web container).
-// A build can point them somewhere else — the demo build pulls them off a CDN instead of
-// shipping ~140 MB of images into the deployment. `import.meta.env` is undefined in plain
-// Node; the guard keeps this module loadable without Vite.
+// Images/GIFs are mounted beside the web app or read from a CDN; imported Vital MP4s are bundled
+// from public/video/vitalanimations into local web/mobile builds. Bases can be overridden.
+// `import.meta.env` is undefined in plain Node; the guard keeps this module loadable without Vite.
 const ENV = import.meta.env || {}
 const IMG_BASE = ENV.VITE_IMG_BASE || 'img/'
 const GIF_BASE = ENV.VITE_GIF_BASE || 'gif/'
+const VIDEO_BASE = ENV.VITE_VIDEO_BASE || 'video/vitalanimations/'
 export const imgSrc = ex => IMG_BASE + ex.img
 export const gifSrc = ex => GIF_BASE + ex.gif
+export const videoSrc = ex => VIDEO_BASE + ex.video
 
 // Cardio exercises log time + speed instead of weight × reps.
 export const isCardio = idOrEx => (typeof idOrEx === 'string' ? EXIDX[idOrEx] : idOrEx)?.bp === 'cardio'

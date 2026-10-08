@@ -1,13 +1,13 @@
 /* openGym service worker — the app shell and its hashed assets are cached at install and kept
-   fresh network-first, media (img/gif) cache-first in a cache of its own. A home-screen app
+   fresh network-first, exercise media cache-first in a cache of its own. A home-screen app
    reopened without a network comes back from here with the same bundle it last ran; the state
    itself lives in localStorage. `CACHE` carries the build hash (vite.config.js rewrites it), so
    every deploy is a new worker with its own cache and the previous build's files are dropped on
    activate; the media cache (`MEDIA`) is kept across builds. */
 const CACHE = 'opengym-rt-__BUILD__'
 
-/* Exercise media (img/, gif/) lives in a cache of its own that outlives builds (#281). It used to
-   share the build's cache, so every update swept every animation along with the old bundle, and
+/* Exercise media (img/, gif/, video/vitalanimations/) has a cache that outlives builds (#281).
+   It used to share the build's cache, so updates swept animations along with the old bundle, and
    an installed app opened offline after an update showed broken tiles for exercises it had shown
    the day before. The media never changes under a given URL, so there is nothing to invalidate.
 
@@ -15,8 +15,8 @@ const CACHE = 'opengym-rt-__BUILD__'
    Content-Length) the least recently used entries go first. The Cache API keeps entries in the
    order they were written, so a hit is written back once per worker lifetime to move it to the
    end: least recently used as far as this worker has seen, which is what "LRU-ish" means here.
-   The whole catalogue is about 140 MB, so the cap only bites for someone who has browsed most of
-   it. lib/media-prefetch.js fills this cache ahead for the exercises in the plan — in the app
+   The original GIF catalogue is about 140 MB; optional MP4s also count towards this cap.
+   lib/media-prefetch.js fills this cache ahead for the exercises in the plan — in the app
    installed on the home screen only; a browser tab gets what it has shown and nothing more — and
    names it too, so a new name has to change there as well (sw-media.test.js pins the two
    together). */
@@ -28,7 +28,7 @@ const MEDIA_GUESS_BYTES = 64 * 1024
 // Trimming lists the whole cache, so it runs after every MEDIA_TRIM_EVERY new entries rather
 // than after each one, and once when a new worker activates.
 const MEDIA_TRIM_EVERY = 20
-const isMediaPath = p => p.includes('/img/') || p.includes('/gif/')
+const isMediaPath = p => p.includes('/img/') || p.includes('/gif/') || p.includes('/video/vitalanimations/')
 
 // What the shell needs to boot without a network: index.html plus every script/style/icon it
 // references. Read from the served index.html so the list follows the build, not a hand-kept
@@ -95,7 +95,7 @@ self.addEventListener('activate', e => {
 // URL, that would stand in for the animation for good, since nothing sweeps this cache.
 const realMedia = res => {
   const type = (res.headers && res.headers.get('content-type')) || ''
-  return res.ok && !res.redirected && !/text\/html/i.test(type)
+  return res.status === 200 && !res.redirected && !/text\/html/i.test(type)
 }
 
 async function adoptMedia(name) {
@@ -127,6 +127,28 @@ async function trimMedia() {
   }
 }
 
+// Cached complete videos must still honour the byte ranges requested by mobile players.
+async function mediaRange(request, res) {
+  const range = request.headers?.get('range')
+  if (!range || res.status !== 200) return res
+  const match = /^bytes=(\d*)-(\d*)$/.exec(range)
+  if (!match || (!match[1] && !match[2])) return res
+  const blob = await res.blob()
+  const size = blob.size
+  const start = match[1] ? Number(match[1]) : Math.max(0, size - Number(match[2]))
+  const end = match[1] && match[2] ? Math.min(Number(match[2]), size - 1) : size - 1
+  const headers = new Headers(res.headers)
+  headers.set('accept-ranges', 'bytes')
+  if (start > end || start >= size) {
+    headers.set('content-range', `bytes */${size}`)
+    headers.set('content-length', '0')
+    return new Response(null, { status: 416, headers })
+  }
+  headers.set('content-range', `bytes ${start}-${end}/${size}`)
+  headers.set('content-length', String(end - start + 1))
+  return new Response(blob.slice(start, end + 1, blob.type), { status: 206, headers })
+}
+
 // URLs written back this worker lifetime; see MEDIA above.
 const touched = new Set()
 function media(e) {
@@ -137,7 +159,7 @@ function media(e) {
         const copy = hit.clone()
         e.waitUntil(c.put(e.request, copy).catch(() => {}))
       }
-      return hit
+      return mediaRange(e.request, hit)
     }
     return fetch(e.request).then(res => {
       if (realMedia(res)) {
@@ -145,7 +167,7 @@ function media(e) {
         const copy = res.clone()
         e.waitUntil(c.put(e.request, copy).then(() => { if (++mediaPuts >= MEDIA_TRIM_EVERY) { mediaPuts = 0; return trimMedia() } }).catch(() => {}))
       }
-      return res
+      return mediaRange(e.request, res)
     })
   }))
 }

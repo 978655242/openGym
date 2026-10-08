@@ -74,6 +74,58 @@ describe('Media gifSize', () => {
   })
 })
 
+describe('Media — built-in MP4', () => {
+  const videoEx = { ...EX, video: '0054.mp4' }
+
+  it('plays the matched video and pauses on a tap without replacing the exercise', () => {
+    const play = vi.spyOn(HTMLMediaElement.prototype, 'play').mockResolvedValue()
+    const pause = vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => {})
+    try {
+      mount({ ex: videoEx })
+      const video = host.querySelector('video')
+      expect(video?.getAttribute('src')).toBe('video/vitalanimations/0054.mp4')
+      expect(video.muted).toBe(true)
+      expect(video.loop).toBe(true)
+      expect(video.hasAttribute('playsinline')).toBe(true)
+      act(() => { host.querySelector('.exmedia').click() })
+      expect(pause).toHaveBeenCalled()
+      expect(host.querySelector('video')).toBe(video)
+      expect(host.querySelector('.gifhint').textContent).toContain('tap to play')
+      act(() => { host.querySelector('.exmedia').click() })
+      expect(play).toHaveBeenCalledTimes(2)
+    } finally { play.mockRestore(); pause.mockRestore() }
+  })
+
+  it('falls back to the same exercise GIF, then its photo, if media fails', () => {
+    const play = vi.spyOn(HTMLMediaElement.prototype, 'play').mockResolvedValue()
+    const pause = vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => {})
+    try {
+      mount({ ex: videoEx })
+      expect(host.querySelector('video')?.getAttribute('src')).toBe('video/vitalanimations/0054.mp4')
+      act(() => { host.querySelector('video').dispatchEvent(new Event('error')) })
+      expect(host.querySelector('img')?.getAttribute('src')).toBe('gif/bench.gif')
+      act(() => { host.querySelector('img').dispatchEvent(new Event('error')) })
+      expect(host.querySelector('img')?.getAttribute('src')).toBe('img/bench.jpg')
+    } finally { play.mockRestore(); pause.mockRestore() }
+  })
+
+  it('waits for a tap in list layout after workout media is re-enabled', () => {
+    const play = vi.spyOn(HTMLMediaElement.prototype, 'play').mockResolvedValue()
+    const pause = vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => {})
+    try {
+      mocks.S = { gifSize: 'off', workoutView: 'list' }
+      mount({ ex: videoEx, minimizable: true })
+      expect(host.querySelector('video')).toBeNull()
+      mocks.S = { gifSize: 'full', workoutView: 'list' }
+      mount({ ex: videoEx, minimizable: true })
+      expect(host.querySelector('video')).not.toBeNull()
+      expect(play).not.toHaveBeenCalled()
+      act(() => { host.querySelector('.gifhint').click() })
+      expect(play).toHaveBeenCalledTimes(1)
+    } finally { play.mockRestore(); pause.mockRestore() }
+  })
+})
+
 /* ---------------------------------------------------------------- custom exercises -------- */
 
 const H = c => c.repeat(64)

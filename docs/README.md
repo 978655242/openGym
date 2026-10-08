@@ -46,6 +46,7 @@ Design notes for specific features, kept next to the code they describe:
 | [Set types](dev/SET_TYPES.md) | Drop sets and rest-pause: the set-row model and how totals are counted |
 | [Workout views](dev/LIST_VIEW.md) | The cards, list and compact layouts of the workout screen |
 | [Combine routines](dev/COMBINE_ROUTINES.md) | Spec for running more than one routine in a session |
+| [动作步骤朗读执行计划](superpowers/plans/2026-10-07-exercise-speech.md) | 本地语音讲解、训练页控制、自动模式和平台验收 |
 
 ## Still stuck?
 

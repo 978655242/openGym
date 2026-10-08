@@ -25,6 +25,10 @@ private data directory on every change (iOS is allowed to evict WebView storage 
 pressure — the file mirror is the durable copy and is restored on launch). Backups go out
 through the OS share sheet instead of a browser download.
 
+### Exercise instruction narration
+
+The web app can read the current-language exercise steps through the browser's local Web Speech voice. It is off until you press **Read instructions**; **Auto narration** is also off by default and lasts only for the open workout. Narration stops when the app enters the background and does not promise lock-screen playback. The Capacitor iOS and Android shells have not yet been tested with this browser API, so their availability and offline behavior are unverified; no native text-to-speech plugin is included.
+
 ### Connecting the app to your own server
 
 On first launch the app asks how you want to use it. Alongside the fully local mode above,
@@ -162,6 +166,33 @@ into both native projects — re-run it after every web-code change before build
 
 > **Heads-up:** after `build:mobile`, `frontend/dist` contains the *mobile* bundle.
 > Run a plain `npm run build` again before deploying `dist` to a server.
+
+### Optional local Vital Animations videos
+
+Before `build:mobile`, import your downloaded Free50 pack from the repository root:
+
+```sh
+node scripts/import-vitalanimations.mjs "/path/to/VitalAnimations"
+```
+
+The source directory must contain `Free50/50gymworkouts.json` and all 50
+`Free50/Free50/*.mp4` files. Quote paths containing spaces. The importer validates
+the complete pack before copying, preserves source files, and refuses to overwrite
+existing destination files. It imports only MP4s, not the supplier's English
+instructions; existing IDs, history, metadata and localized instructions stay intact.
+
+The gitignored files in `frontend/public/video/vitalanimations/` are copied by Vite
+into the mobile web build and by `cap sync` into both native projects. Matched
+exercises use these bundled videos without a CDN; unmatched exercises still load
+their original media from the CDN. Re-run `npm run build:mobile` after importing.
+
+The supplier's [README](https://github.com/exercisedb-pro/exercisedb-dataset) applies
+the same commercial license to the free pack as to paid packages and forbids raw
+redistribution. These assets are **not AGPL**; you are responsible for the pack's
+terms when using the videos inside your own app. Do not publish raw MP4s or commit
+copied native assets, and keep this local pack out of openGym's public release
+artifacts. Before distributing your own app, check the supplier's license terms;
+openGym's AGPL grants no rights to these videos.
 
 ## App icons & splash screens
 

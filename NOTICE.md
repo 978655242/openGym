@@ -124,6 +124,30 @@ language-model assistance. They are not copied from a separate Portuguese
 dataset. Their review status and translation policy are documented alongside
 the source files.
 
+### Optional Vital Animations videos — commercial license, not AGPL
+
+`scripts/import-vitalanimations.mjs` copies only the MP4s from a user's downloaded
+Free50 pack into the gitignored `frontend/public/video/vitalanimations/` directory.
+It does not import supplier metadata or instructions; openGym's existing exercise
+IDs, history, metadata and localized instructions remain unchanged.
+
+The supplier's [README](https://github.com/exercisedb-pro/exercisedb-dataset) states
+that the free pack is usable in your own projects under the **same commercial
+license terms as the paid packages**. Its commercial license prohibits reselling
+or redistributing the raw dataset or ZIP files, uploading to stock asset
+marketplaces, and selling the animation library as a standalone product. The
+videos are **not covered by openGym's AGPL**. Developers are responsible for
+complying with the terms of their downloaded pack.
+
+These raw assets must not be committed to the public repository or included in
+published container images or openGym's public release artifacts. Vite's public-directory
+copy intentionally includes locally imported files in private web/mobile builds,
+including Capacitor's copied native assets; keep those copies out of the repository
+too. Use inside your own application is subject to the supplier's commercial
+license, not openGym's AGPL. See the
+[self-hosting](docs/SELF_HOSTING.md#optional-local-vital-animations-videos) and
+[mobile](docs/MOBILE.md#optional-local-vital-animations-videos) import instructions.
+
 ## Device-link QR codes
 
 openGym shows a device-link code as a QR so another device can add a passkey. It uses

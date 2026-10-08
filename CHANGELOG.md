@@ -10,6 +10,12 @@
   pressure and travel with media ZIP backups.
   The API advertises check-in retention before the app sends photos; legacy QR data stays archived.
 - The Chinese exercise library now displays translated names for the built-in exercise catalogue.
+- Locally imported Vital Animations Free50 MP4s replace GIFs for 48 matched catalogue entries,
+  without changing exercise IDs, training history or translated instructions. Unmatched exercises
+  keep their GIFs; failed videos fall back to the original media. Installed web apps can prefetch
+  the videos and serve cached byte ranges offline. Licensed videos stay outside version control
+  and must not be redistributed in public builds.
+- Exercise steps can now be read aloud from exercise details and workout cards with the device's matching local voice. Controls pause, stop and replay each step sequence; narration never starts by itself. Workout **Auto narration** is optional, session-only, and reads each exercise once. It stops on language, route and background changes; Capacitor-shell support remains unverified.
 
 
 ## v1.3.9 — 2026-09-28

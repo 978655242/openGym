@@ -2,6 +2,9 @@
 media/img/
 media/gif/
 
+# Licensed Vital Animations MP4s — imported locally, never redistributed
+frontend/public/video/vitalanimations/
+
 # Runtime data — users, passkeys, per-user state, session secret
 data/
 

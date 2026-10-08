@@ -44,10 +44,10 @@ function worker(all = new Map()) {
   }
   const self = { addEventListener: (t, f) => { handlers[t] = f }, skipWaiting: () => {}, clients: { claim: async () => {} }, registration: {} }
   new Function('self', 'caches', 'fetch', 'location', SW)(self, caches, fetch, new URL(ORIGIN + '/sw.js'))
-  env.get = async path => {
+  env.get = async (path, headers) => {
     const pending = []
     let responded = null
-    const e = { request: { url: ORIGIN + path, method: 'GET', mode: 'no-cors' }, respondWith: p => { responded = p }, waitUntil: p => { pending.push(p) } }
+    const e = { request: { url: ORIGIN + path, method: 'GET', mode: 'no-cors', headers: new Headers(headers) }, respondWith: p => { responded = p }, waitUntil: p => { pending.push(p) } }
     handlers.fetch(e)
     const res = await responded
     await Promise.all(pending)
@@ -75,6 +75,32 @@ describe('sw.js exercise media', () => {
     w.net.up = false
     const again = await w.get('/gif/0001.gif')
     expect(await again.text()).toBe('GIF89a' + ORIGIN + '/gif/0001.gif')
+  })
+
+  it('serves a cached MP4 byte range offline without caching a partial file', async () => {
+    const w = worker()
+    w.net.answer = () => new Response('0123456789', { headers: { 'content-type': 'video/mp4', 'content-length': '10' } })
+    await w.get('/video/vitalanimations/0054.mp4')
+    w.net.up = false
+    const res = await w.get('/video/vitalanimations/0054.mp4', { Range: 'bytes=2-5' })
+    expect(res.status).toBe(206)
+    expect(res.headers.get('content-range')).toBe('bytes 2-5/10')
+    expect(await res.text()).toBe('2345')
+    const suffix = await w.get('/video/vitalanimations/0054.mp4', { Range: 'bytes=-3' })
+    expect(await suffix.text()).toBe('789')
+    const outside = await w.get('/video/vitalanimations/0054.mp4', { Range: 'bytes=10-' })
+    expect(outside.status).toBe(416)
+    expect(outside.headers.get('content-range')).toBe('bytes */10')
+    expect(await (await w.media().match(ORIGIN + '/video/vitalanimations/0054.mp4')).text()).toBe('0123456789')
+  })
+
+  it('never stores a network partial MP4 as a complete video', async () => {
+    const w = worker()
+    w.net.answer = () => new Response('0123', { status: 206, headers: { 'content-type': 'video/mp4', 'content-range': 'bytes 0-3/10' } })
+    const res = await w.get('/video/vitalanimations/0054.mp4', { Range: 'bytes=0-3' })
+    expect(res.status).toBe(206)
+    expect(w.media().urls()).toEqual([])
+    expect(w.all.get(BUILD)?.urls() || []).toEqual([])
   })
 
   it('survives an update: activate sweeps old builds, never the media, and adopts what an old build had cached', async () => {
